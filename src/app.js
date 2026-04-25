@@ -1,0 +1,59 @@
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const swaggerUi = require('swagger-ui-express');
+require('dotenv').config();
+
+const { createUserTable } = require('./models/User');
+const userRoutes = require('./routes/userRoutes');
+const swaggerSpec = require('./config/swagger');
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Swagger documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { 
+  swaggerOptions: {
+    persistAuthorization: true,
+  }
+}));
+
+// Initialize database tables
+createUserTable().catch((err) => console.error('Failed to create tables:', err));
+
+// Routes
+app.use('/api/users', userRoutes);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', message: 'ClickCard API is running' });
+});
+
+// API docs redirect
+app.get('/', (req, res) => {
+  res.redirect('/api-docs');
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+  });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+  });
+});
+
+module.exports = app;
