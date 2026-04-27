@@ -15,6 +15,9 @@ const createUserTable = async () => {
       fcm_token VARCHAR(500),
       is_email_verified BOOLEAN DEFAULT FALSE,
       is_profile_complete BOOLEAN DEFAULT FALSE,
+      public_profile_enabled BOOLEAN DEFAULT FALSE,
+      profile_bio VARCHAR(500),
+      profile_header_image VARCHAR(500),
       last_login TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -55,10 +58,44 @@ const createUserTable = async () => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS share_links (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      custom_slug VARCHAR(50) UNIQUE,
+      short_code VARCHAR(8) UNIQUE NOT NULL,
+      is_password_protected BOOLEAN DEFAULT FALSE,
+      share_password VARCHAR(255),
+      is_active BOOLEAN DEFAULT TRUE,
+      expiry_date TIMESTAMP,
+      requires_qr_scan BOOLEAN DEFAULT FALSE,
+      allowed_domains JSONB DEFAULT '[]',
+      view_count INT DEFAULT 0,
+      unique_visitors INT DEFAULT 0,
+      last_viewed TIMESTAMP,
+      share_method VARCHAR(50),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS share_link_analytics (
+      id SERIAL PRIMARY KEY,
+      share_link_id INT NOT NULL REFERENCES share_links(id) ON DELETE CASCADE,
+      visitor_ip VARCHAR(50),
+      visitor_user_agent VARCHAR(500),
+      referrer_source VARCHAR(255),
+      device_type VARCHAR(50),
+      platform VARCHAR(50),
+      viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
+    CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON share_links(user_id);
+    CREATE INDEX IF NOT EXISTS idx_share_links_slug ON share_links(custom_slug);
+    CREATE INDEX IF NOT EXISTS idx_share_links_short_code ON share_links(short_code);
+    CREATE INDEX IF NOT EXISTS idx_analytics_share_link_id ON share_link_analytics(share_link_id);
   `;
 
   try {

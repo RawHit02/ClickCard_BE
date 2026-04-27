@@ -4,9 +4,9 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'ClickCard Authentication API',
+      title: 'ClickCard API',
       version: '1.0.0',
-      description: 'Complete authentication backend with user registration, login, password management, and profile setup',
+      description: 'Complete backend API for ClickCard including Authentication, User Profiles, Share Links, and Analytics',
       contact: {
         name: 'ClickCard Support',
       },
@@ -43,7 +43,7 @@ const options = {
       },
     },
   },
-  apis: ['./src/routes/userRoutes.js', './src/swaggerDocs.js'],
+  apis: ['./src/routes/*.js', './src/swaggerDocs.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

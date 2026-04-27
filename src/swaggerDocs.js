@@ -608,4 +608,264 @@
  *         description: Invalid current password or validation failed
  *       401:
  *         description: Unauthorized
+ *
+ * /api/share/create:
+ *   post:
+ *     summary: Create a new share link
+ *     description: Create a unique share link with custom slug, expiry, and optional password protection.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               custom_slug:
+ *                 type: string
+ *                 example: john-doe
+ *                 description: Optional custom URL slug
+ *               expiry_days:
+ *                 type: integer
+ *                 example: 30
+ *                 description: Number of days until link expires
+ *               requires_password:
+ *                 type: boolean
+ *                 example: false
+ *               share_password:
+ *                 type: string
+ *                 example: SecurePass123
+ *                 description: Required if requires_password is true
+ *     responses:
+ *       201:
+ *         description: Share link created successfully
+ *       400:
+ *         description: Validation failed
+ *       401:
+ *         description: Unauthorized
+ *
+ * /api/share/links:
+ *   get:
+ *     summary: Get all share links for user
+ *     description: Retrieve all share links created by the authenticated user.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of share links retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *
+ * /api/share/update/{id}:
+ *   post:
+ *     summary: Update share link settings
+ *     description: Update settings for an existing share link.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               custom_slug:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *               expiry_date:
+ *                 type: string
+ *                 format: date-time
+ *               requires_password:
+ *                 type: boolean
+ *               share_password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Share link updated successfully
+ *       404:
+ *         description: Share link not found
+ *
+ * /api/share/{id}:
+ *   delete:
+ *     summary: Delete share link
+ *     description: Permanently delete a share link.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Share link deleted successfully
+ *       404:
+ *         description: Share link not found
+ *
+ * /api/share/{id}/regenerate:
+ *   post:
+ *     summary: Regenerate short code and QR
+ *     description: Generate a new random short code and QR code for the share link.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Short code regenerated successfully
+ *
+ * /api/share/{id}/analytics:
+ *   get:
+ *     summary: Get analytics for a share link
+ *     description: Retrieve detailed visitor analytics for a specific share link.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: period
+ *         schema:
+ *           type: string
+ *           enum: [7days, 30days, all]
+ *           default: 30days
+ *     responses:
+ *       200:
+ *         description: Analytics retrieved successfully
+ *
+ * /api/share/{id}/qr:
+ *   get:
+ *     summary: Get QR code for share link
+ *     description: Retrieve the QR code for a specific share link.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [dataurl, buffer]
+ *           default: dataurl
+ *     responses:
+ *       200:
+ *         description: QR code generated successfully
+ *
+ * /api/share/analytics/all:
+ *   get:
+ *     summary: Get analytics for all user's share links
+ *     description: Retrieve high-level analytics summary for all links owned by the user.
+ *     tags:
+ *       - Share Links
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All analytics retrieved successfully
+ *
+ * /api/public/profile/{identifier}:
+ *   get:
+ *     summary: Get public profile
+ *     description: Retrieve a public profile by its slug, short code, or user ID.
+ *     tags:
+ *       - Public Profile
+ *     parameters:
+ *       - in: path
+ *         name: identifier
+ *         required: true
+ *         description: Custom slug, short code, or numeric user ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Profile retrieved successfully
+ *       403:
+ *         description: Password required for this profile
+ *       404:
+ *         description: Profile not found
+ *
+ * /api/public/profile/{identifier}/qr:
+ *   get:
+ *     summary: Get public QR code
+ *     description: Retrieve the QR code for a public profile.
+ *     tags:
+ *       - Public Profile
+ *     parameters:
+ *       - in: path
+ *         name: identifier
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [dataurl, buffer]
+ *           default: dataurl
+ *     responses:
+ *       200:
+ *         description: QR code retrieved successfully
+ *
+ * /api/public/profile/{identifier}/verify-password:
+ *   post:
+ *     summary: Verify password for protected profiles
+ *     description: Verify the password for a password-protected public profile.
+ *     tags:
+ *       - Public Profile
+ *     parameters:
+ *       - in: path
+ *         name: identifier
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password verified successfully
+ *       401:
+ *         description: Invalid password
  */

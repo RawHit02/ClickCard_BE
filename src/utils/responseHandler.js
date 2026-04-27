@@ -14,7 +14,16 @@ const sendErrorResponse = (res, statusCode, message, error = null) => {
   });
 };
 
+const responseHandler = (res, statusCode, success, data, message) => {
+  return res.status(statusCode).json({
+    success,
+    message,
+    data,
+  });
+};
+
 module.exports = {
   sendSuccessResponse,
   sendErrorResponse,
+  responseHandler,
 };

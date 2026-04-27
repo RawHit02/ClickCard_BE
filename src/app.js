@@ -6,6 +6,9 @@ require('dotenv').config();
 
 const { createUserTable } = require('./models/User');
 const userRoutes = require('./routes/userRoutes');
+const shareLinkRoutes = require('./routes/shareLinkRoutes');
+const publicRoutes = require('./routes/publicRoutes');
+const trackingMiddleware = require('./middleware/trackingMiddleware');
 const swaggerSpec = require('./config/swagger');
 
 const app = express();
@@ -14,6 +17,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(trackingMiddleware);
 
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { 
@@ -27,6 +31,8 @@ createUserTable().catch((err) => console.error('Failed to create tables:', err))
 
 // Routes
 app.use('/api/users', userRoutes);
+app.use('/api/share', shareLinkRoutes);
+app.use('/api/public', publicRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
