@@ -8,6 +8,7 @@ const { createUserTable } = require('./models/User');
 const userRoutes = require('./routes/userRoutes');
 const shareLinkRoutes = require('./routes/shareLinkRoutes');
 const publicRoutes = require('./routes/publicRoutes');
+const socialRoutes = require('./routes/socialRoutes');
 const trackingMiddleware = require('./middleware/trackingMiddleware');
 const swaggerSpec = require('./config/swagger');
 
@@ -31,6 +32,7 @@ createUserTable().catch((err) => console.error('Failed to create tables:', err))
 
 // Routes
 app.use('/api/users', userRoutes);
+app.use('/api/auth', socialRoutes);
 app.use('/api/share', shareLinkRoutes);
 app.use('/api/public', publicRoutes);
 

@@ -868,4 +868,222 @@
  *         description: Password verified successfully
  *       401:
  *         description: Invalid password
+ *
+ * /api/auth/social-signin:
+ *   post:
+ *     summary: Login or Register via social accounts (Google, Apple)
+ *     description: |
+ *       Unified endpoint for user authentication and registration using social providers (Google, Apple).
+ *       
+ *       **Features:**
+ *       - Automatically creates new user account on first sign-in
+ *       - Logs in existing users seamlessly
+ *       - Supports both Google and Apple authentication
+ *       - Returns JWT access and refresh tokens
+ *       - Tracks device ID and FCM token for push notifications
+ *       - Prevents duplicate social ID linking
+ *       - Enforces provider consistency (user cannot mix providers on same email)
+ *       
+ *       **Flow:**
+ *       1. Client obtains social provider credentials (Google ID or Apple ID)
+ *       2. Client sends email, social ID, and auth provider type
+ *       3. Backend checks if user exists and validates social ID
+ *       4. If new user: account created automatically with random secure password
+ *       5. If existing user: validation performed to ensure provider consistency
+ *       6. JWT tokens generated and stored in database
+ *       7. Response includes user data, tokens, and registration status
+ *       
+ *       **Post-Signup:**
+ *       - Users can complete their profile using /api/users/profile/complete
+ *       - Email verification is skipped for social users (email pre-verified by provider)
+ *       - Password can be set later if needed
+ *     tags:
+ *       - Social Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - authType
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: john.doe@gmail.com
+ *                 description: Email address from social provider (required, must be valid email)
+ *               authType:
+ *                 type: string
+ *                 enum: ["google", "apple"]
+ *                 example: google
+ *                 description: Social authentication provider type (required)
+ *               googleId:
+ *                 type: string
+ *                 example: "110169026411008588289"
+ *                 description: Google unique identifier (required when authType is "google")
+ *               appleId:
+ *                 type: string
+ *                 example: "001234.567890.abcde"
+ *                 description: Apple unique identifier (required when authType is "apple")
+ *               name:
+ *                 type: string
+ *                 example: John Doe
+ *                 description: User's full name from social provider (optional)
+ *               phoneNumber:
+ *                 type: string
+ *                 example: "9876654352"
+ *                 description: User's phone number (optional, 10-15 digits)
+ *               deviceId:
+ *                 type: string
+ *                 example: "device-iphone-12-pro"
+ *                 description: Device identifier for tracking (optional, defaults to "UNKNOWN_DEVICE")
+ *               fcmToken:
+ *                 type: string
+ *                 example: "fcm_device_token_ABC123XYZ"
+ *                 description: Firebase Cloud Messaging token for push notifications (optional)
+ *     responses:
+ *       201:
+ *         description: New user registered successfully via social authentication
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: User registered successfully via social auth
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                           example: 1
+ *                         email:
+ *                           type: string
+ *                           example: john.doe@gmail.com
+ *                         name:
+ *                           type: string
+ *                           example: John Doe
+ *                         phone:
+ *                           type: string
+ *                           example: "9876654352"
+ *                         isEmailVerified:
+ *                           type: boolean
+ *                           example: false
+ *                         isProfileComplete:
+ *                           type: boolean
+ *                           example: false
+ *                         authProvider:
+ *                           type: string
+ *                           enum: ["email", "google", "apple"]
+ *                           example: google
+ *                     tokens:
+ *                       type: object
+ *                       properties:
+ *                         accessToken:
+ *                           type: string
+ *                           description: JWT access token (7 days expiry)
+ *                           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                         refreshToken:
+ *                           type: string
+ *                           description: JWT refresh token (30 days expiry)
+ *                           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                     isNewUser:
+ *                       type: boolean
+ *                       example: true
+ *                       description: Indicates if this is a new user registration
+ *       200:
+ *         description: Existing user logged in successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Login successful
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                       description: Existing user data (same structure as 201 response)
+ *                     tokens:
+ *                       type: object
+ *                       description: New tokens generated for this session
+ *                     isNewUser:
+ *                       type: boolean
+ *                       example: false
+ *       400:
+ *         description: |
+ *           Validation failed or bad request. Common errors:
+ *           - Missing or invalid email address
+ *           - Missing or invalid authType (must be "google" or "apple")
+ *           - Missing googleId when authType is "google"
+ *           - Missing appleId when authType is "apple"
+ *           - Invalid email format
+ *           - Account created with different provider (provider mismatch)
+ *           - No social account linked to this email
+ *           - Social ID mismatch (different account than expected)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Validation failed
+ *                 errors:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       field:
+ *                         type: string
+ *                         example: googleId
+ *                       message:
+ *                         type: string
+ *                         example: googleId is required when authType is "google"
+ *       409:
+ *         description: |
+ *           Conflict - Social ID already linked to another account.
+ *           Each social provider ID can only be linked to one account.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: googleId is already linked to another account
+ *       500:
+ *         description: Internal server error during authentication
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */

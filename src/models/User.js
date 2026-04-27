@@ -19,6 +19,10 @@ const createUserTable = async () => {
       profile_bio VARCHAR(500),
       profile_header_image VARCHAR(500),
       last_login TIMESTAMP,
+      auth_provider VARCHAR(50) DEFAULT 'email',
+      google_id VARCHAR(255) UNIQUE,
+      apple_id VARCHAR(255) UNIQUE,
+      device_id VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -90,6 +94,8 @@ const createUserTable = async () => {
 
     CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+    CREATE INDEX IF NOT EXISTS idx_users_apple_id ON users(apple_id);
     CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
     CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON share_links(user_id);
@@ -328,6 +334,91 @@ const User = {
     `;
     try {
       const result = await pool.query(query, [fcmToken, userId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Find user by Google ID
+  findByGoogleId: async (googleId) => {
+    const query = `
+      SELECT id, email, first_name, last_name, phone_number, google_id, apple_id, 
+             auth_provider, is_email_verified, is_profile_complete, fcm_token, device_id
+      FROM users
+      WHERE google_id = $1
+    `;
+    try {
+      const result = await pool.query(query, [googleId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Find user by Apple ID
+  findByAppleId: async (appleId) => {
+    const query = `
+      SELECT id, email, first_name, last_name, phone_number, google_id, apple_id,
+             auth_provider, is_email_verified, is_profile_complete, fcm_token, device_id
+      FROM users
+      WHERE apple_id = $1
+    `;
+    try {
+      const result = await pool.query(query, [appleId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Create user via social auth
+  createSocialUser: async (email, authType, socialId, name = '', phone = '', fcmToken = '', deviceId = '') => {
+    const socialIdField = authType === 'google' ? 'google_id' : 'apple_id';
+    const randomPassword = require('crypto').randomBytes(32).toString('hex');
+    
+    const query = `
+      INSERT INTO users (email, password, first_name, phone_number, fcm_token, 
+                         auth_provider, ${socialIdField}, device_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, email, first_name, last_name, phone_number, is_email_verified, 
+                is_profile_complete, auth_provider, fcm_token, device_id, created_at
+    `;
+    try {
+      const result = await pool.query(query, [email, randomPassword, name, phone, fcmToken, authType, socialId, deviceId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Update user social ID
+  updateSocialId: async (userId, authType, socialId) => {
+    const socialIdField = authType === 'google' ? 'google_id' : 'apple_id';
+    const query = `
+      UPDATE users
+      SET ${socialIdField} = $1, auth_provider = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING id, email, first_name, auth_provider, google_id, apple_id
+    `;
+    try {
+      const result = await pool.query(query, [socialId, authType, userId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Update user device and fcm info
+  updateDeviceInfo: async (userId, deviceId, fcmToken) => {
+    const query = `
+      UPDATE users
+      SET device_id = $1, fcm_token = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING id, device_id, fcm_token
+    `;
+    try {
+      const result = await pool.query(query, [deviceId, fcmToken, userId]);
       return result.rows[0];
     } catch (err) {
       throw err;
