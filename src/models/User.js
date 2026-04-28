@@ -99,21 +99,36 @@ const createUserTable = async () => {
     await pool.query(query);
     console.log('Tables created or already exist');
     
-    // Then, run migration to add username column if it doesn't exist
+    // Then, run migration to add missing columns if they don't exist
     try {
-      const checkUsernameColumn = `
-        SELECT EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'users' AND column_name = 'username'
-        );
-      `;
-      const result = await pool.query(checkUsernameColumn);
-      const columnExists = result.rows[0].exists;
-      
-      if (!columnExists) {
-        console.log('Adding username column to users table...');
-        await pool.query('ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE;');
-        console.log('Username column added successfully');
+      const columnsToAdd = [
+        { name: 'username', type: 'VARCHAR(100) UNIQUE' },
+        { name: 'fcm_token', type: 'VARCHAR(500)' },
+        { name: 'public_profile_enabled', type: 'BOOLEAN DEFAULT FALSE' },
+        { name: 'profile_bio', type: 'VARCHAR(500)' },
+        { name: 'profile_header_image', type: 'VARCHAR(500)' },
+        { name: 'last_login', type: 'TIMESTAMP' },
+        { name: 'auth_provider', type: "VARCHAR(50) DEFAULT 'email'" },
+        { name: 'google_id', type: 'VARCHAR(255) UNIQUE' },
+        { name: 'apple_id', type: 'VARCHAR(255) UNIQUE' },
+        { name: 'device_id', type: 'VARCHAR(255)' }
+      ];
+
+      for (const col of columnsToAdd) {
+        const checkColumn = `
+          SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = '${col.name}'
+          );
+        `;
+        const result = await pool.query(checkColumn);
+        const columnExists = result.rows[0].exists;
+        
+        if (!columnExists) {
+          console.log(`Adding ${col.name} column to users table...`);
+          await pool.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type};`);
+          console.log(`${col.name} column added successfully`);
+        }
       }
       
       // Create indexes
