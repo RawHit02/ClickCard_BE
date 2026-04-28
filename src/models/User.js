@@ -172,7 +172,9 @@ const User = {
   // Find user by email
   findByEmail: async (email) => {
     const query = `
-      SELECT id, email, username, password, is_email_verified, is_profile_complete, first_name, last_name, phone_number
+      SELECT id, email, username, password, is_email_verified, is_profile_complete, 
+             first_name, last_name, phone_number, google_id, apple_id, auth_provider,
+             fcm_token, device_id
       FROM users
       WHERE email = $1
     `;
