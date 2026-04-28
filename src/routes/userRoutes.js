@@ -17,7 +17,7 @@ const authenticateToken = require('../middleware/auth');
  * /api/users/initiate-registration:
  *   post:
  *     summary: Step 1 - Initiate registration with email
- *     description: User enters email address. OTP is sent to the email for verification.
+ *     description: User enters a valid email address. OTP is sent to verify the email before proceeding to username selection.
  *     tags: [User Authentication]
  *     requestBody:
  *       required: true
@@ -31,6 +31,8 @@ const authenticateToken = require('../middleware/auth');
  *               email:
  *                 type: string
  *                 format: email
+ *                 pattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+ *                 description: Valid email address (e.g., user@example.com, john.doe@company.co.uk)
  *                 example: user@example.com
  *     responses:
  *       200:
@@ -42,17 +44,42 @@ const authenticateToken = require('../middleware/auth');
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 message:
  *                   type: string
+ *                   example: "OTP sent to your email"
  *                 data:
  *                   type: object
  *                   properties:
  *                     email:
  *                       type: string
+ *                       example: user@example.com
  *       400:
- *         description: Invalid email or validation error
+ *         description: Invalid email format or missing required field
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid email format. Please enter a valid email address (e.g., user@example.com)"
  *       409:
  *         description: Email already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Email already registered"
  */
 router.post('/initiate-registration', UserController.initiateRegistration);
 

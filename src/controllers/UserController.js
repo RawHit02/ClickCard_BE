@@ -1,6 +1,7 @@
 const AuthService = require('../services/AuthService');
 const { User } = require('../models/User');
 const { sendSuccessResponse, sendErrorResponse } = require('../utils/responseHandler');
+const { validateEmail } = require('../utils/validator');
 
 const UserController = {
   // Step 1: Initiate registration (email only)
@@ -10,6 +11,10 @@ const UserController = {
 
       if (!email) {
         return sendErrorResponse(res, 400, 'Email is required');
+      }
+
+      if (!validateEmail(email)) {
+        return sendErrorResponse(res, 400, 'Invalid email format. Please enter a valid email address (e.g., user@example.com)');
       }
 
       const result = await AuthService.initiateRegistration(email);
