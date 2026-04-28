@@ -332,8 +332,8 @@
  *
  * /api/users/login/user:
  *   post:
- *     summary: Login user
- *     description: Authenticate user with email and password. Returns access and refresh tokens.
+ *     summary: User login with flexible credentials
+ *     description: Login with email, username, or phone number along with password. Returns access and refresh tokens.
  *     tags:
  *       - Authentication
  *     requestBody:
@@ -343,13 +343,13 @@
  *           schema:
  *             type: object
  *             required:
- *               - email
+ *               - credential
  *               - password
  *             properties:
- *               email:
+ *               credential:
  *                 type: string
- *                 format: email
- *                 example: john@example.com
+ *                 description: Email, username, or phone number
+ *                 example: user@example.com
  *               password:
  *                 type: string
  *                 format: password
@@ -372,6 +372,8 @@
  *                     userId:
  *                       type: integer
  *                     email:
+ *                       type: string
+ *                     username:
  *                       type: string
  *                     firstName:
  *                       type: string
@@ -1086,4 +1088,195 @@
  *                 message:
  *                   type: string
  *                   example: Internal server error
+ *
+ * /api/users/profile/make-public:
+ *   post:
+ *     summary: Make user profile public
+ *     description: |
+ *       Enables public profile visibility for the authenticated user.
+ *       Profile must be complete before it can be made public.
+ *       Once public, the profile can be accessed via public share links.
+ *       
+ *       **Requirements:**
+ *       - User must be authenticated (valid JWT token required)
+ *       - Profile must be marked as complete (is_profile_complete = true)
+ *       - Public profile link can then be shared with others
+ *       
+ *       **After Making Public:**
+ *       - User public profile accessible via /api/public/profile/{identifier}
+ *       - Share links will start working
+ *       - Others can view profile via public URL
+ *     tags:
+ *       - User Profile Management
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile successfully made public
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile is now public
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     profileId:
+ *                       type: integer
+ *                       example: 1
+ *                     email:
+ *                       type: string
+ *                       example: user@example.com
+ *                     name:
+ *                       type: string
+ *                       example: John Doe
+ *                     isPublic:
+ *                       type: boolean
+ *                       example: true
+ *                     message:
+ *                       type: string
+ *                       example: Your public profile is now active and accessible via share links
+ *       400:
+ *         description: Profile must be complete before making it public
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Profile must be complete before making it public. Please complete your profile first.
+ *       401:
+ *         description: Unauthorized - No valid JWT token provided
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ *
+ * /api/users/profile/make-private:
+ *   post:
+ *     summary: Make user profile private
+ *     description: |
+ *       Disables public profile visibility for the authenticated user.
+ *       After making private, public share links will no longer be accessible.
+ *       
+ *       **Requirements:**
+ *       - User must be authenticated (valid JWT token required)
+ *       
+ *       **After Making Private:**
+ *       - User public profile will NOT be accessible
+ *       - Share links will stop working
+ *       - Public profile endpoint will return 404 Not Found
+ *     tags:
+ *       - User Profile Management
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile successfully made private
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile is now private
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     profileId:
+ *                       type: integer
+ *                       example: 1
+ *                     email:
+ *                       type: string
+ *                       example: user@example.com
+ *                     name:
+ *                       type: string
+ *                       example: John Doe
+ *                     isPublic:
+ *                       type: boolean
+ *                       example: false
+ *                     message:
+ *                       type: string
+ *                       example: Your public profile has been deactivated. Share links will no longer work.
+ *       401:
+ *         description: Unauthorized - No valid JWT token provided
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ *
+ * /api/users/profile/visibility:
+ *   get:
+ *     summary: Get user profile visibility status
+ *     description: |
+ *       Retrieves the current public profile visibility status for the authenticated user.
+ *       Shows whether the profile is public or private and other profile status information.
+ *       
+ *       **Use this to:**
+ *       - Check if user's profile is currently public
+ *       - Verify profile completion status
+ *       - Check email verification status
+ *       - Determine if public profile link is active
+ *     tags:
+ *       - User Profile Management
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile visibility status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile visibility retrieved
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     profileId:
+ *                       type: integer
+ *                       example: 1
+ *                     email:
+ *                       type: string
+ *                       example: user@example.com
+ *                     name:
+ *                       type: string
+ *                       example: John Doe
+ *                     isPublic:
+ *                       type: boolean
+ *                       example: true
+ *                       description: Whether profile is publicly visible
+ *                     isProfileComplete:
+ *                       type: boolean
+ *                       example: true
+ *                       description: Whether profile information is complete
+ *                     isEmailVerified:
+ *                       type: boolean
+ *                       example: true
+ *                       description: Whether email is verified
+ *       401:
+ *         description: Unauthorized - No valid JWT token provided
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
  */

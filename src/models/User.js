@@ -5,6 +5,7 @@ const createUserTable = async () => {
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
+      username VARCHAR(100) UNIQUE,
       phone_number VARCHAR(20) UNIQUE,
       password VARCHAR(255) NOT NULL,
       first_name VARCHAR(100),
@@ -94,6 +95,7 @@ const createUserTable = async () => {
 
     CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
     CREATE INDEX IF NOT EXISTS idx_users_apple_id ON users(apple_id);
     CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
@@ -114,14 +116,14 @@ const createUserTable = async () => {
 
 const User = {
   // Create a new user with full registration details
-  create: async (email, hashedPassword, name = '', phone = '', fcmToken = '') => {
+  create: async (email, hashedPassword, name = '', phone = '', fcmToken = '', username = '') => {
     const query = `
-      INSERT INTO users (email, password, first_name, phone_number, fcm_token)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, email, first_name, phone_number, is_email_verified, is_profile_complete, created_at
+      INSERT INTO users (email, password, first_name, phone_number, fcm_token, username)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, email, username, first_name, phone_number, is_email_verified, is_profile_complete, created_at
     `;
     try {
-      const result = await pool.query(query, [email, hashedPassword, name, phone, fcmToken]);
+      const result = await pool.query(query, [email, hashedPassword, name, phone, fcmToken, username]);
       return result.rows[0];
     } catch (err) {
       throw err;
@@ -131,12 +133,27 @@ const User = {
   // Find user by email
   findByEmail: async (email) => {
     const query = `
-      SELECT id, email, password, is_email_verified, is_profile_complete, first_name, last_name, phone_number
+      SELECT id, email, username, password, is_email_verified, is_profile_complete, first_name, last_name, phone_number
       FROM users
       WHERE email = $1
     `;
     try {
       const result = await pool.query(query, [email]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Find user by username
+  findByUsername: async (username) => {
+    const query = `
+      SELECT id, email, username, is_email_verified, is_profile_complete, first_name
+      FROM users
+      WHERE username = $1
+    `;
+    try {
+      const result = await pool.query(query, [username]);
       return result.rows[0];
     } catch (err) {
       throw err;
@@ -419,6 +436,39 @@ const User = {
     `;
     try {
       const result = await pool.query(query, [deviceId, fcmToken, userId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Update profile visibility (make public/private)
+  updateProfileVisibility: async (userId, isPublic) => {
+    const query = `
+      UPDATE users
+      SET public_profile_enabled = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, email, first_name, last_name, public_profile_enabled, is_profile_complete
+    `;
+    try {
+      const result = await pool.query(query, [isPublic, userId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Get user with profile visibility status
+  getProfileWithVisibility: async (userId) => {
+    const query = `
+      SELECT id, email, first_name, last_name, phone_number, profile_picture, 
+             profile_bio, public_profile_enabled, is_profile_complete, is_email_verified,
+             created_at, updated_at
+      FROM users
+      WHERE id = $1
+    `;
+    try {
+      const result = await pool.query(query, [userId]);
       return result.rows[0];
     } catch (err) {
       throw err;

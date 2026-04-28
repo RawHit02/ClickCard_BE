@@ -1,20 +1,90 @@
 const AuthService = require('../services/AuthService');
+const { User } = require('../models/User');
 const { sendSuccessResponse, sendErrorResponse } = require('../utils/responseHandler');
 
 const UserController = {
-  // POST /api/users/initiate-registration/unique
+  // Step 1: Initiate registration (email only)
   initiateRegistration: async (req, res) => {
     try {
-      const { name, E_Mai_l, phone, password, confirmPassword, fcmToken } = req.body;
+      const { email } = req.body;
 
-      // Validate required fields
-      if (!name || !E_Mai_l || !phone || !password || !confirmPassword) {
-        return sendErrorResponse(res, 400, 'Name, email, phone, password, and confirm password are required');
+      if (!email) {
+        return sendErrorResponse(res, 400, 'Email is required');
       }
 
-      const result = await AuthService.initiateRegistration(
+      const result = await AuthService.initiateRegistration(email);
+
+      if (result.success) {
+        return sendSuccessResponse(res, 200, result.message, result.data);
+      } else {
+        const statusCode = result.statusCode || 400;
+        return sendErrorResponse(res, statusCode, result.message);
+      }
+    } catch (err) {
+      console.error('Initiate registration error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+  // Step 2: Verify email OTP for registration
+  verifyEmailOTPForRegistration: async (req, res) => {
+    try {
+      const { email, otp } = req.body;
+
+      if (!email || !otp) {
+        return sendErrorResponse(res, 400, 'Email and OTP are required');
+      }
+
+      const result = await AuthService.verifyEmailOTPForRegistration(email, otp);
+
+      if (result.success) {
+        return sendSuccessResponse(res, 200, result.message, result.data);
+      } else {
+        const statusCode = result.statusCode || 400;
+        return sendErrorResponse(res, statusCode, result.message);
+      }
+    } catch (err) {
+      console.error('Verify OTP error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+  // Step 3: Check username availability
+  checkUsernameAvailability: async (req, res) => {
+    try {
+      const { username } = req.body;
+
+      if (!username) {
+        return sendErrorResponse(res, 400, 'Username is required');
+      }
+
+      const result = await AuthService.checkUsernameAvailability(username);
+
+      if (result.success) {
+        return sendSuccessResponse(res, 200, result.message, { available: result.available });
+      } else {
+        const statusCode = result.statusCode || 400;
+        return sendErrorResponse(res, statusCode, result.message);
+      }
+    } catch (err) {
+      console.error('Check username error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+  // Step 4: Complete registration (create user)
+  completeRegistration: async (req, res) => {
+    try {
+      const { email, username, name, phone, password, confirmPassword, fcmToken } = req.body;
+
+      if (!email || !username || !name || !phone || !password || !confirmPassword) {
+        return sendErrorResponse(res, 400, 'Email, username, name, phone, password, and confirm password are required');
+      }
+
+      const result = await AuthService.completeRegistration(
+        email,
+        username,
         name,
-        E_Mai_l,
         phone,
         password,
         confirmPassword,
@@ -24,16 +94,16 @@ const UserController = {
       if (result.success) {
         return sendSuccessResponse(res, 201, result.message, result.data);
       } else {
-        const statusCode = result.statusCode || (result.message === 'Validation failed' ? 400 : 409);
-        return sendErrorResponse(res, statusCode, result.message, result.errors || result.error);
+        const statusCode = result.statusCode || 400;
+        return sendErrorResponse(res, statusCode, result.message);
       }
     } catch (err) {
-      console.error('Initiate registration error:', err);
+      console.error('Complete registration error:', err);
       return sendErrorResponse(res, 500, 'Internal server error');
     }
   },
 
-  // POST /api/users/resend-email-otp
+  // Resend email OTP
   resendEmailOTP: async (req, res) => {
     try {
       const { email } = req.body;
@@ -55,7 +125,7 @@ const UserController = {
     }
   },
 
-  // POST /api/users/verify-email-otp
+  // Verify email OTP (for existing users)
   verifyEmailOTP: async (req, res) => {
     try {
       const { email, otp } = req.body;
@@ -80,18 +150,18 @@ const UserController = {
   // POST /api/users/login/user
   login: async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { credential, password } = req.body;
 
-      if (!email || !password) {
-        return sendErrorResponse(res, 400, 'Email and password are required');
+      if (!credential || !password) {
+        return sendErrorResponse(res, 400, 'Credential (email, username, or phone) and password are required');
       }
 
-      const result = await AuthService.login(email, password);
+      const result = await AuthService.login(credential, password);
 
       if (result.success) {
         return sendSuccessResponse(res, 200, result.message, result.data);
       } else {
-        const statusCode = result.message === 'Please verify your email first' ? 403 : 401;
+        const statusCode = result.statusCode || (result.message === 'Please verify your email first' ? 403 : 401);
         return sendErrorResponse(res, statusCode, result.message, result.data);
       }
     } catch (err) {
@@ -292,6 +362,106 @@ const UserController = {
       }
     } catch (err) {
       console.error('Change password error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+  // POST /api/users/profile/make-public
+  makeProfilePublic: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+
+      if (!userId) {
+        return sendErrorResponse(res, 401, 'Unauthorized - User ID not found');
+      }
+
+      // Check if profile is complete
+      const user = await User.getProfileWithVisibility(userId);
+
+      if (!user) {
+        return sendErrorResponse(res, 404, 'User not found');
+      }
+
+      if (!user.is_profile_complete) {
+        return sendErrorResponse(
+          res,
+          400,
+          'Profile must be complete before making it public. Please complete your profile first.'
+        );
+      }
+
+      // Update profile visibility to public
+      const result = await User.updateProfileVisibility(userId, true);
+
+      return sendSuccessResponse(res, 200, 'Profile is now public', {
+        profileId: result.id,
+        email: result.email,
+        name: result.first_name,
+        isPublic: result.public_profile_enabled,
+        message: 'Your public profile is now active and accessible via share links',
+      });
+    } catch (err) {
+      console.error('Make profile public error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+  // POST /api/users/profile/make-private
+  makeProfilePrivate: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+
+      if (!userId) {
+        return sendErrorResponse(res, 401, 'Unauthorized - User ID not found');
+      }
+
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return sendErrorResponse(res, 404, 'User not found');
+      }
+
+      // Update profile visibility to private
+      const result = await User.updateProfileVisibility(userId, false);
+
+      return sendSuccessResponse(res, 200, 'Profile is now private', {
+        profileId: result.id,
+        email: result.email,
+        name: result.first_name,
+        isPublic: result.public_profile_enabled,
+        message: 'Your public profile has been deactivated. Share links will no longer work.',
+      });
+    } catch (err) {
+      console.error('Make profile private error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+  // GET /api/users/profile/visibility
+  getProfileVisibility: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+
+      if (!userId) {
+        return sendErrorResponse(res, 401, 'Unauthorized - User ID not found');
+      }
+
+      const user = await User.getProfileWithVisibility(userId);
+
+      if (!user) {
+        return sendErrorResponse(res, 404, 'User not found');
+      }
+
+      return sendSuccessResponse(res, 200, 'Profile visibility retrieved', {
+        profileId: user.id,
+        email: user.email,
+        name: user.first_name,
+        isPublic: user.public_profile_enabled,
+        isProfileComplete: user.is_profile_complete,
+        isEmailVerified: user.is_email_verified,
+      });
+    } catch (err) {
+      console.error('Get profile visibility error:', err);
       return sendErrorResponse(res, 500, 'Internal server error');
     }
   },

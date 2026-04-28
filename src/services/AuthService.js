@@ -11,29 +11,158 @@ const {
 const {
   validateEmail,
   validatePassword,
+  validatePhoneNumber,
+  validateUsername,
   validateFieldsRegistration,
   validateFieldsProfile,
   validateEnhancedRegistration,
 } = require('../utils/validator');
 
 const AuthService = {
-  // Initiate registration with name, phone, and fcmToken
-  initiateRegistration: async (name, email, phone, password, confirmPassword, fcmToken = '') => {
+  // Step 1: Initiate registration with email only (send OTP)
+  initiateRegistration: async (email) => {
     try {
-      // Validate fields
-      const validation = validateEnhancedRegistration(name, email, phone, password, confirmPassword);
-      if (!validation.isValid) {
-        return {
-          success: false,
-          message: 'Validation failed',
-          errors: validation.errors,
-        };
+      // Validate email
+      if (!email || !validateEmail(email)) {
+        return { success: false, message: 'Invalid email address', statusCode: 400 };
       }
 
       // Check if email already exists
       const existingEmail = await User.findByEmail(email);
       if (existingEmail) {
         return { success: false, message: 'Email already registered', statusCode: 409 };
+      }
+
+      // Generate and send OTP
+      const otpResult = await OTP.generate(email, 'email_verification');
+      await sendOTPEmail(email, otpResult.otp_code, 'email_verification', 'User');
+
+      return {
+        success: true,
+        message: 'OTP sent to your email',
+        data: {
+          email: email,
+        },
+      };
+    } catch (err) {
+      console.error('Initiate registration error:', err);
+      return { success: false, message: 'Registration initiation failed', error: err.message };
+    }
+  },
+
+  // Step 2: Verify email OTP (before username/password entry)
+  verifyEmailOTPForRegistration: async (email, otpCode) => {
+    try {
+      // Validate email
+      if (!email || !validateEmail(email)) {
+        return { success: false, message: 'Invalid email address', statusCode: 400 };
+      }
+
+      const otpResult = await OTP.verify(email, otpCode, 'email_verification');
+
+      if (!otpResult.success) {
+        return { success: false, message: otpResult.message, statusCode: 400 };
+      }
+
+      return {
+        success: true,
+        message: 'Email verified. Proceed to username selection.',
+        data: {
+          email: email,
+          verified: true,
+        },
+      };
+    } catch (err) {
+      console.error('Verify OTP error:', err);
+      return { success: false, message: 'OTP verification failed', error: err.message };
+    }
+  },
+
+  // Step 3: Check username availability
+  checkUsernameAvailability: async (username) => {
+    try {
+      // Validate username
+      if (!username || !validateUsername(username)) {
+        return {
+          success: false,
+          message: 'Username must be 3-20 characters (alphanumeric and underscores only)',
+          statusCode: 400,
+          available: false,
+        };
+      }
+
+      // Check if username already exists
+      const existingUsername = await User.findByUsername(username);
+      if (existingUsername) {
+        return {
+          success: false,
+          message: 'Username already taken',
+          statusCode: 409,
+          available: false,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Username is available',
+        available: true,
+      };
+    } catch (err) {
+      console.error('Check username error:', err);
+      return { success: false, message: 'Failed to check username', error: err.message, available: false };
+    }
+  },
+
+  // Step 4: Complete registration (create user with all details)
+  completeRegistration: async (email, username, name, phone, password, confirmPassword, fcmToken = '') => {
+    try {
+      // Validate all fields
+      if (!email || !validateEmail(email)) {
+        return { success: false, message: 'Invalid email address', statusCode: 400 };
+      }
+
+      if (!username || !validateUsername(username)) {
+        return {
+          success: false,
+          message: 'Username must be 3-20 characters (alphanumeric and underscores only)',
+          statusCode: 400,
+        };
+      }
+
+      if (!name || name.trim() === '') {
+        return { success: false, message: 'Name is required', statusCode: 400 };
+      }
+
+      if (!phone || !validatePhoneNumber(phone)) {
+        return { success: false, message: 'Invalid phone number', statusCode: 400 };
+      }
+
+      if (!password) {
+        return { success: false, message: 'Password is required', statusCode: 400 };
+      } else if (!validatePassword(password)) {
+        return {
+          success: false,
+          message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)',
+          statusCode: 400,
+        };
+      }
+
+      if (!confirmPassword) {
+        return { success: false, message: 'Confirm password is required', statusCode: 400 };
+      } else if (password !== confirmPassword) {
+        return { success: false, message: 'Passwords do not match', statusCode: 400 };
+      }
+
+      // Check if email already exists
+      const existingEmail = await User.findByEmail(email);
+      if (existingEmail) {
+        return { success: false, message: 'Email already registered', statusCode: 409 };
+      }
+
+      // Check if username already exists
+      const existingUsername = await User.findByUsername(username);
+      if (existingUsername) {
+        return { success: false, message: 'Username already taken', statusCode: 409 };
       }
 
       // Check if phone already exists
@@ -45,32 +174,47 @@ const AuthService = {
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Create user with name, phone, and fcmToken
-      const newUser = await User.create(email, hashedPassword, name, phone, fcmToken);
+      // Create user with all details
+      const newUser = await User.create(email, hashedPassword, name, phone, fcmToken, username);
 
-      // Generate and send OTP
-      const otpResult = await OTP.generate(email, 'email_verification');
-      await sendOTPEmail(email, otpResult.otp_code, 'email_verification', name);
+      // Mark email as verified (since they already verified it in step 2)
+      await User.verifyEmail(newUser.id);
+
+      // Send welcome email
+      await sendWelcomeEmail(email, name);
+
+      // Generate tokens so user is immediately logged in
+      const accessToken = generateAccessToken(newUser.id, newUser.email);
+      const refreshToken = generateRefreshToken(newUser.id);
+
+      // Store refresh token
+      const refreshTokenExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      await RefreshToken.store(newUser.id, refreshToken, refreshTokenExpiry);
 
       return {
         success: true,
-        message: 'Registration initiated. Please verify your email.',
+        message: 'Registration completed successfully',
         data: {
           userId: newUser.id,
           email: newUser.email,
+          username: newUser.username,
           name: newUser.first_name,
           phone: newUser.phone_number,
-          isEmailVerified: newUser.is_email_verified,
+          isEmailVerified: true,
           isProfileComplete: newUser.is_profile_complete,
+          accessToken,
+          refreshToken,
         },
       };
     } catch (err) {
-      console.error('Initiate registration error:', err);
+      console.error('Complete registration error:', err);
       if (err.code === '23505') {
         // Unique constraint violation
         const detail = err.detail || '';
         if (detail.includes('email')) {
           return { success: false, message: 'Email already registered', statusCode: 409 };
+        } else if (detail.includes('username')) {
+          return { success: false, message: 'Username already taken', statusCode: 409 };
         } else if (detail.includes('phone')) {
           return { success: false, message: 'Phone number already registered', statusCode: 409 };
         }
@@ -106,7 +250,7 @@ const AuthService = {
     }
   },
 
-  // Verify email OTP
+  // Verify email OTP (for existing users)
   verifyEmailOTP: async (email, otpCode) => {
     try {
       const otpResult = await OTP.verify(email, otpCode, 'email_verification');
@@ -117,6 +261,10 @@ const AuthService = {
 
       // Get user and update email verification
       const user = await User.findByEmail(email);
+      if (!user) {
+        return { success: false, message: 'User not found' };
+      }
+
       await User.verifyEmail(user.id);
 
       // Send welcome email
@@ -136,6 +284,7 @@ const AuthService = {
         data: {
           userId: user.id,
           email: user.email,
+          username: user.username,
           accessToken,
           refreshToken,
           isProfileComplete: user.is_profile_complete,
@@ -147,24 +296,37 @@ const AuthService = {
     }
   },
 
-  // Login user
-  login: async (email, password) => {
+  // Login user with email, username, or phone
+  login: async (credential, password) => {
     try {
-      // Validate email
-      if (!validateEmail(email)) {
-        return { success: false, message: 'Invalid email address' };
+      if (!credential || !password) {
+        return { success: false, message: 'Credential and password are required', statusCode: 400 };
       }
 
-      // Check if user exists
-      const user = await User.findByEmail(email);
+      let user = null;
+
+      // Try to find user by email first
+      if (validateEmail(credential)) {
+        user = await User.findByEmail(credential);
+      }
+      // Try to find user by username
+      else if (validateUsername(credential)) {
+        user = await User.findByUsername(credential);
+      }
+      // Try to find user by phone
+      else {
+        user = await User.findByPhone(credential);
+      }
+
+      // User not found
       if (!user) {
-        return { success: false, message: 'Invalid email or password' };
+        return { success: false, message: 'Invalid credentials', statusCode: 401 };
       }
 
       // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
-        return { success: false, message: 'Invalid email or password' };
+        return { success: false, message: 'Invalid credentials', statusCode: 401 };
       }
 
       // Check email verification
@@ -172,6 +334,7 @@ const AuthService = {
         return {
           success: false,
           message: 'Please verify your email first',
+          statusCode: 403,
           data: { userId: user.id, email: user.email },
         };
       }
@@ -193,6 +356,7 @@ const AuthService = {
         data: {
           userId: user.id,
           email: user.email,
+          username: user.username,
           firstName: user.first_name,
           lastName: user.last_name,
           isProfileComplete: user.is_profile_complete,

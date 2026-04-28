@@ -14,6 +14,12 @@ const validatePhoneNumber = (phone) => {
   return validator.isMobilePhone(phone, 'any');
 };
 
+const validateUsername = (username) => {
+  // 3-20 characters, alphanumeric and underscores only
+  const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+  return usernameRegex.test(username);
+};
+
 const validateFieldsRegistration = (email, password, confirmPassword) => {
   const errors = {};
 
@@ -102,6 +108,7 @@ module.exports = {
   validateEmail,
   validatePassword,
   validatePhoneNumber,
+  validateUsername,
   validateFieldsRegistration,
   validateFieldsProfile,
   validateEnhancedRegistration,
