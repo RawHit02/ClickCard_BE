@@ -92,23 +92,47 @@ const createUserTable = async () => {
       platform VARCHAR(50),
       viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-
-    CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-    CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
-    CREATE INDEX IF NOT EXISTS idx_users_apple_id ON users(apple_id);
-    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
-    CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
-    CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON share_links(user_id);
-    CREATE INDEX IF NOT EXISTS idx_share_links_slug ON share_links(custom_slug);
-    CREATE INDEX IF NOT EXISTS idx_share_links_short_code ON share_links(short_code);
-    CREATE INDEX IF NOT EXISTS idx_analytics_share_link_id ON share_link_analytics(share_link_id);
   `;
 
   try {
+    // First, create all tables
     await pool.query(query);
     console.log('Tables created or already exist');
+    
+    // Then, run migration to add username column if it doesn't exist
+    try {
+      const checkUsernameColumn = `
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'username'
+        );
+      `;
+      const result = await pool.query(checkUsernameColumn);
+      const columnExists = result.rows[0].exists;
+      
+      if (!columnExists) {
+        console.log('Adding username column to users table...');
+        await pool.query('ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE;');
+        console.log('Username column added successfully');
+      }
+      
+      // Create indexes
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_apple_id ON users(apple_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON share_links(user_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_share_links_slug ON share_links(custom_slug);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_share_links_short_code ON share_links(short_code);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_analytics_share_link_id ON share_link_analytics(share_link_id);');
+      
+      console.log('Migrations and indexes applied successfully');
+    } catch (migrationErr) {
+      console.error('Error during migration:', migrationErr.message);
+    }
   } catch (err) {
     console.error('Error creating tables:', err);
   }
