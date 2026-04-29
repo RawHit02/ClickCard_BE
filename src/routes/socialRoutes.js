@@ -81,42 +81,35 @@ const handleValidationErrors = (req, res, next) => {
 };
 
 /**
- * POST /api/auth/social-signin
- * Login or Register via social accounts (Google, Apple)
- * 
- * Request body:
- * {
- *   "name": "John Doe",
- *   "email": "john.doe@gmail.com",
- *   "phoneNumber": "9876654352",
- *   "deviceId": "some-device-id",
- *   "fcmToken": "fcm_device_token_ABC123",
- *   "appleId": "apple-id-123",
- *   "googleId": "google-id-123",
- *   "authType": "google"
- * }
- * 
- * Response:
- * {
- *   "success": true,
- *   "message": "User registered successfully via social auth",
- *   "data": {
- *     "user": {
- *       "id": 1,
- *       "email": "john.doe@gmail.com",
- *       "name": "John Doe",
- *       "phone": "9876654352",
- *       "isEmailVerified": false,
- *       "isProfileComplete": false,
- *       "authProvider": "google"
- *     },
- *     "tokens": {
- *       "accessToken": "eyJ...",
- *       "refreshToken": "eyJ..."
- *     },
- *     "isNewUser": true
- *   }
- * }
+ * @swagger
+ * /api/auth/social-signin:
+ *   post:
+ *     summary: Login or Register via social accounts (Google, Apple)
+ *     description: |
+ *       Unified endpoint for social authentication. Automatically creates accounts for new users.
+ *       Now supports referralCode for tracking invites.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, authType]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               authType: { type: string, enum: [google, apple] }
+ *               googleId: { type: string }
+ *               appleId: { type: string }
+ *               name: { type: string }
+ *               phoneNumber: { type: string }
+ *               deviceId: { type: string }
+ *               referralCode: { type: string, example: "CC-ABC123" }
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       201:
+ *         description: Social registration successful
  */
 router.post(
   '/social-signin',

@@ -23,7 +23,7 @@ const upload = multer({
 /**
  * @swagger
  * tags:
- *   name: User Authentication
+ *   name: Authentication
  *   description: Multi-step user registration and authentication
  */
 
@@ -35,7 +35,7 @@ const upload = multer({
  *   post:
  *     summary: Step 1 - Initiate registration with email
  *     description: User enters a valid email address. OTP is sent to verify the email before proceeding to username selection.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -106,7 +106,7 @@ router.post('/initiate-registration', UserController.initiateRegistration);
  *   post:
  *     summary: Step 2 - Verify email OTP during registration
  *     description: User enters OTP received in email. After verification, user can proceed to username selection.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -154,7 +154,7 @@ router.post('/verify-email-otp-registration', UserController.verifyEmailOTPForRe
  *   post:
  *     summary: Step 3 - Check username availability
  *     description: User checks if desired username is available. Username must be 3-20 characters (alphanumeric and underscores).
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -191,6 +191,42 @@ router.post('/verify-email-otp-registration', UserController.verifyEmailOTPForRe
  */
 router.post('/check-username', UserController.checkUsernameAvailability);
 
+/**
+ * @swagger
+ * /api/users/complete-registration:
+ *   post:
+ *     summary: Step 4 - Complete registration
+ *     description: Finalize registration with username and optional referral code.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - username
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: user@example.com
+ *               username:
+ *                 type: string
+ *                 example: john_doe
+ *               referralCode:
+ *                 type: string
+ *                 example: CC-ABC123
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *       400:
+ *         description: Validation failed
+ *       409:
+ *         description: Username already taken
+ */
+router.post('/complete-registration', UserController.completeRegistration);
+
 
 /* ---------------------- EMAIL OTP MANAGEMENT ---------------------- */
 
@@ -200,7 +236,7 @@ router.post('/check-username', UserController.checkUsernameAvailability);
  *   post:
  *     summary: Resend email OTP
  *     description: Resend OTP to email for users who didn't receive or want to regenerate it.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -228,7 +264,7 @@ router.post('/resend-email-otp', UserController.resendEmailOTP);
  *   post:
  *     summary: Verify email OTP (existing users)
  *     description: Verify OTP for existing users (e.g., password reset flow). User is logged in after verification.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -284,7 +320,7 @@ router.post('/verify-email-otp', UserController.verifyEmailOTP);
  *   post:
  *     summary: Initiate passwordless login
  *     description: Send an OTP to the user's registered email using their email or username.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -312,7 +348,7 @@ router.post('/login/initiate', UserController.initiateLogin);
  *   post:
  *     summary: Verify login OTP
  *     description: Verify the OTP sent to email and complete login. Returns tokens.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -349,7 +385,7 @@ router.post('/login/verify', UserController.verifyLoginOTP);
  *   post:
  *     summary: Refresh access token
  *     description: Get a new access token using refresh token.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
@@ -375,7 +411,7 @@ router.post('/refresh-token', UserController.refreshToken);
  *   post:
  *     summary: User logout
  *     description: Logout user and revoke refresh token.
- *     tags: [User Authentication]
+ *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
  *     responses:

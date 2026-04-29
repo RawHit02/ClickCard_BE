@@ -2,6 +2,8 @@ const { User } = require('../models/User');
 const { generateAccessToken, generateRefreshToken } = require('../utils/jwtUtils');
 const RefreshToken = require('../models/RefreshToken');
 const bcrypt = require('bcrypt');
+const AuthService = require('./AuthService');
+const Referral = require('../models/Referral');
 
 const SocialAuthService = {
   // Validate social signin request
@@ -42,6 +44,7 @@ const SocialAuthService = {
         appleId,
         googleId,
         authType,
+        referralCode
       } = requestData;
 
       // Validate request
@@ -88,6 +91,9 @@ const SocialAuthService = {
           }
         }
 
+        // Generate referral code for new user
+        const userReferralCode = await AuthService.generateUniqueReferralCode();
+
         // Create new user
         const socialId = authType === 'google' ? googleId : appleId;
         user = await User.createSocialUser(
@@ -96,9 +102,17 @@ const SocialAuthService = {
           socialId,
           name,
           phoneNumber,
-          '', // Removed fcmToken
-          deviceId
+          deviceId,
+          userReferralCode
         );
+
+        // Handle referral if code provided
+        if (referralCode) {
+          const referrer = await User.findByReferralCode(referralCode);
+          if (referrer) {
+            await Referral.create(referrer.id, user.id);
+          }
+        }
       } else {
         // Existing user
         user = existingUserByEmail;
@@ -148,7 +162,7 @@ const SocialAuthService = {
         }
 
         // Update device info
-        await User.updateDeviceInfo(user.id, deviceId, ''); // Removed fcmToken
+        await User.updateDeviceInfo(user.id, deviceId);
 
         // Update name if not set and provided
         if (!user.first_name && name) {

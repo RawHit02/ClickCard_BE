@@ -14,6 +14,7 @@ const SocialController = {
         appleId,
         googleId,
         authType,
+        referralCode,
       } = req.body;
 
       // Validate required fields
@@ -46,6 +47,7 @@ const SocialController = {
         appleId: appleId || null,
         googleId: googleId || null,
         authType,
+        referralCode: referralCode || null,
       });
 
       if (result.success) {

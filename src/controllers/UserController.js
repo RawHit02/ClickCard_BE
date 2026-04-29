@@ -80,6 +80,29 @@ const UserController = {
     }
   },
 
+  // Step 4: Complete registration
+  completeRegistration: async (req, res) => {
+    try {
+      const { email, username, referralCode } = req.body;
+
+      if (!email || !username) {
+        return sendErrorResponse(res, 400, 'Email and username are required');
+      }
+
+      const result = await AuthService.completeRegistration(email, username, referralCode);
+
+      if (result.success) {
+        return sendSuccessResponse(res, 201, result.message, result.data);
+      } else {
+        const statusCode = result.statusCode || 400;
+        return sendErrorResponse(res, statusCode, result.message);
+      }
+    } catch (err) {
+      console.error('Complete registration error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
 
 
   // Resend email OTP

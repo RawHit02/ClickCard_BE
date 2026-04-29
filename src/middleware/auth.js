@@ -1,7 +1,8 @@
 const { verifyAccessToken } = require('../utils/jwtUtils');
 const { sendErrorResponse } = require('../utils/responseHandler');
+const { User } = require('../models/User');
 
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
@@ -14,8 +15,18 @@ const authenticateToken = (req, res, next) => {
     return sendErrorResponse(res, 401, 'Invalid or expired access token');
   }
 
-  req.user = verification.decoded;
-  next();
+  try {
+    const user = await User.findById(verification.decoded.userId);
+    if (!user || user.is_blocked) {
+      return sendErrorResponse(res, 403, user?.is_blocked ? 'Your account has been blocked. Please contact support.' : 'User not found');
+    }
+
+    req.user = verification.decoded;
+    next();
+  } catch (err) {
+    console.error('Auth middleware error:', err);
+    return sendErrorResponse(res, 500, 'Internal server error during authentication');
+  }
 };
 
 const isAdmin = (req, res, next) => {

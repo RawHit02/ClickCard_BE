@@ -24,8 +24,26 @@ const createUserTable = async () => {
       google_id VARCHAR(255) UNIQUE,
       apple_id VARCHAR(255) UNIQUE,
       device_id VARCHAR(255),
+      is_blocked BOOLEAN DEFAULT FALSE,
+      moderation_status VARCHAR(20) DEFAULT 'approved',
+      referral_code VARCHAR(20) UNIQUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key VARCHAR(100) PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS referrals (
+      id SERIAL PRIMARY KEY,
+      referrer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      referred_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status VARCHAR(50) DEFAULT 'signed_up',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(referred_id)
     );
 
     CREATE TABLE IF NOT EXISTS email_otps (
@@ -121,7 +139,10 @@ const createUserTable = async () => {
         { name: 'auth_provider', type: "VARCHAR(50) DEFAULT 'email'" },
         { name: 'google_id', type: 'VARCHAR(255) UNIQUE' },
         { name: 'apple_id', type: 'VARCHAR(255) UNIQUE' },
-        { name: 'device_id', type: 'VARCHAR(255)' }
+        { name: 'device_id', type: 'VARCHAR(255)' },
+        { name: 'is_blocked', type: 'BOOLEAN DEFAULT FALSE' },
+        { name: 'moderation_status', type: "VARCHAR(20) DEFAULT 'approved'" },
+        { name: 'referral_code', type: 'VARCHAR(20) UNIQUE' }
       ];
 
       for (const col of columnsToAdd) {
@@ -153,6 +174,9 @@ const createUserTable = async () => {
       await pool.query('CREATE INDEX IF NOT EXISTS idx_share_links_slug ON share_links(custom_slug);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_share_links_short_code ON share_links(short_code);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_analytics_share_link_id ON share_link_analytics(share_link_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);');
       
       console.log('Migrations and indexes applied successfully');
     } catch (migrationErr) {
@@ -165,14 +189,14 @@ const createUserTable = async () => {
 
 const User = {
   // Create a new user with full registration details
-  create: async (email, hashedPassword, name = '', phone = '', fcmToken = '', username = '') => {
+  create: async (email, hashedPassword, name = '', phone = '', fcmToken = '', username = '', referralCode = '') => {
     const query = `
-      INSERT INTO users (email, password, first_name, phone_number, fcm_token, username)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, email, username, first_name, phone_number, is_email_verified, is_profile_complete, created_at
+      INSERT INTO users (email, password, first_name, phone_number, fcm_token, username, referral_code)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, email, username, first_name, phone_number, is_email_verified, is_profile_complete, created_at, role, is_blocked, referral_code
     `;
     try {
-      const result = await pool.query(query, [email, hashedPassword, name, phone, fcmToken, username]);
+      const result = await pool.query(query, [email, hashedPassword, name, phone, fcmToken, username, referralCode]);
       return result.rows[0];
     } catch (err) {
       throw err;
@@ -184,7 +208,7 @@ const User = {
     const query = `
       SELECT id, email, username, password, is_email_verified, is_profile_complete, 
              first_name, last_name, phone_number, google_id, apple_id, auth_provider,
-             fcm_token, device_id, role
+             fcm_token, device_id, role, is_blocked, moderation_status, referral_code
       FROM users
       WHERE email = $1
     `;
@@ -199,7 +223,7 @@ const User = {
   // Find user by username
   findByUsername: async (username) => {
     const query = `
-      SELECT id, email, username, is_email_verified, is_profile_complete, first_name, role
+      SELECT id, email, username, is_email_verified, is_profile_complete, first_name, role, is_blocked, moderation_status, referral_code
       FROM users
       WHERE username = $1
     `;
@@ -231,7 +255,7 @@ const User = {
     const query = `
       SELECT id, email, first_name, last_name, phone_number, date_of_birth, 
              gender, profile_picture, is_email_verified, is_profile_complete, 
-             last_login, created_at, updated_at, role
+             last_login, created_at, updated_at, role, is_blocked, moderation_status, referral_code
       FROM users
       WHERE id = $1
     `;
@@ -414,7 +438,8 @@ const User = {
   findByGoogleId: async (googleId) => {
     const query = `
       SELECT id, email, first_name, last_name, phone_number, google_id, apple_id, 
-             auth_provider, is_email_verified, is_profile_complete, fcm_token, device_id
+             auth_provider, is_email_verified, is_profile_complete, device_id, role, 
+             is_blocked, moderation_status, referral_code
       FROM users
       WHERE google_id = $1
     `;
@@ -430,7 +455,8 @@ const User = {
   findByAppleId: async (appleId) => {
     const query = `
       SELECT id, email, first_name, last_name, phone_number, google_id, apple_id,
-             auth_provider, is_email_verified, is_profile_complete, fcm_token, device_id
+             auth_provider, is_email_verified, is_profile_complete, device_id, role,
+             is_blocked, moderation_status, referral_code
       FROM users
       WHERE apple_id = $1
     `;
@@ -443,19 +469,19 @@ const User = {
   },
 
   // Create user via social auth
-  createSocialUser: async (email, authType, socialId, name = '', phone = '', fcmToken = '', deviceId = '') => {
+  createSocialUser: async (email, authType, socialId, name = '', phone = '', deviceId = '', referralCode = '') => {
     const socialIdField = authType === 'google' ? 'google_id' : 'apple_id';
     const randomPassword = require('crypto').randomBytes(32).toString('hex');
     
     const query = `
-      INSERT INTO users (email, password, first_name, phone_number, fcm_token, 
-                         auth_provider, ${socialIdField}, device_id)
+      INSERT INTO users (email, password, first_name, phone_number, 
+                         auth_provider, ${socialIdField}, device_id, referral_code)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, email, first_name, last_name, phone_number, is_email_verified, 
-                is_profile_complete, auth_provider, fcm_token, device_id, created_at
+                is_profile_complete, auth_provider, device_id, created_at, role, is_blocked, referral_code
     `;
     try {
-      const result = await pool.query(query, [email, randomPassword, name, phone, fcmToken, authType, socialId, deviceId]);
+      const result = await pool.query(query, [email, randomPassword, name, phone, authType, socialId, deviceId, referralCode]);
       return result.rows[0];
     } catch (err) {
       throw err;
@@ -479,16 +505,16 @@ const User = {
     }
   },
 
-  // Update user device and fcm info
-  updateDeviceInfo: async (userId, deviceId, fcmToken) => {
+  // Update user device info
+  updateDeviceInfo: async (userId, deviceId) => {
     const query = `
       UPDATE users
-      SET device_id = $1, fcm_token = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
-      RETURNING id, device_id, fcm_token
+      SET device_id = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, device_id
     `;
     try {
-      const result = await pool.query(query, [deviceId, fcmToken, userId]);
+      const result = await pool.query(query, [deviceId, userId]);
       return result.rows[0];
     } catch (err) {
       throw err;
@@ -576,12 +602,44 @@ const User = {
   findAll: async () => {
     const query = `
       SELECT id, email, username, first_name, last_name, role, is_profile_complete, 
-             public_profile_enabled, created_at, last_login 
+             public_profile_enabled, is_blocked, moderation_status, referral_code, 
+             created_at, last_login 
       FROM users 
       ORDER BY created_at DESC;
     `;
     const result = await pool.query(query);
     return result.rows;
+  },
+
+  // Block/Unblock user
+  updateBlockStatus: async (userId, isBlocked) => {
+    const query = `
+      UPDATE users 
+      SET is_blocked = $1, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $2 
+      RETURNING id, email, is_blocked;
+    `;
+    const result = await pool.query(query, [isBlocked, userId]);
+    return result.rows[0];
+  },
+
+  // Update moderation status
+  updateModerationStatus: async (userId, status) => {
+    const query = `
+      UPDATE users 
+      SET moderation_status = $1, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $2 
+      RETURNING id, email, moderation_status;
+    `;
+    const result = await pool.query(query, [status, userId]);
+    return result.rows[0];
+  },
+
+  // Find by referral code
+  findByReferralCode: async (code) => {
+    const query = 'SELECT id, email, first_name FROM users WHERE referral_code = $1;';
+    const result = await pool.query(query, [code]);
+    return result.rows[0];
   },
 };
 

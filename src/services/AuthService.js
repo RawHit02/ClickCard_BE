@@ -110,6 +110,90 @@ const AuthService = {
     }
   },
 
+  // Step 4: Complete registration with username and optional referral code
+  completeRegistration: async (email, username, referralCode = null) => {
+    try {
+      // 1. Validate username
+      if (!username || !validateUsername(username)) {
+        return { 
+          success: false, 
+          message: 'Username must be 3-20 characters (alphanumeric and underscores only)', 
+          statusCode: 400 
+        };
+      }
+
+      // 2. Check if username is already taken
+      const existingUsername = await User.findByUsername(username);
+      if (existingUsername) {
+        return { success: false, message: 'Username already taken', statusCode: 409 };
+      }
+
+      // 3. Generate unique referral code for the new user
+      const userReferralCode = await AuthService.generateUniqueReferralCode();
+
+      // 4. Create the user (Passwordless - no password needed)
+      const user = await User.create(email.toLowerCase(), '', '', '', '', username, userReferralCode);
+
+      // 5. Handle referral if code provided
+      if (referralCode) {
+        const referrer = await User.findByReferralCode(referralCode);
+        if (referrer) {
+          const Referral = require('../models/Referral');
+          await Referral.create(referrer.id, user.id);
+        }
+      }
+
+      // 6. Verify email immediately since it was verified in Step 2
+      await User.verifyEmail(user.id);
+
+      // 7. Send welcome email
+      await sendWelcomeEmail(email, username);
+
+      // 8. Generate tokens
+      const accessToken = generateAccessToken(user.id, user.email, user.role);
+      const refreshToken = generateRefreshToken(user.id);
+
+      // Store refresh token
+      const refreshTokenExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      await RefreshToken.store(user.id, refreshToken, refreshTokenExpiry);
+
+      return {
+        success: true,
+        message: 'Registration completed successfully',
+        data: {
+          userId: user.id,
+          email: user.email,
+          username: user.username,
+          referralCode: user.referral_code,
+          accessToken,
+          refreshToken,
+        },
+      };
+    } catch (err) {
+      console.error('Complete registration error:', err);
+      return { success: false, message: 'Registration failed', error: err.message };
+    }
+  },
+
+  // Helper: Generate a unique referral code
+  generateUniqueReferralCode: async () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let isUnique = false;
+    let code = '';
+    
+    while (!isUnique) {
+      code = 'CC-'; // ClickCard prefix
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      
+      const existing = await User.findByReferralCode(code);
+      if (!existing) isUnique = true;
+    }
+    
+    return code;
+  },
+
 
 
   // Resend email OTP

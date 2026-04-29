@@ -10,6 +10,7 @@ const shareLinkRoutes = require('./routes/shareLinkRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const socialRoutes = require('./routes/socialRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const referralRoutes = require('./routes/referralRoutes');
 const trackingMiddleware = require('./middleware/trackingMiddleware');
 const swaggerSpec = require('./config/swagger');
 
@@ -37,6 +38,7 @@ app.use('/api/auth', socialRoutes);
 app.use('/api/share', shareLinkRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/referrals', referralRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
