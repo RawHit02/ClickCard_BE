@@ -1,7 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const UserController = require('../controllers/UserController');
-const authenticateToken = require('../middleware/auth');
+const PDFController = require('../controllers/PDFController');
+const LeadController = require('../controllers/LeadController');
+const { authenticateToken } = require('../middleware/auth');
+const multer = require('multer');
+
+// Configure multer for memory storage (for direct Cloudinary upload)
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images are allowed'));
+    }
+  }
+});
 
 /**
  * @swagger
@@ -174,84 +191,6 @@ router.post('/verify-email-otp-registration', UserController.verifyEmailOTPForRe
  */
 router.post('/check-username', UserController.checkUsernameAvailability);
 
-/**
- * @swagger
- * /api/users/complete-registration:
- *   post:
- *     summary: Step 4 - Complete registration
- *     description: User enters remaining details (username, name, phone, password) to complete signup. User is logged in immediately.
- *     tags: [User Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - username
- *               - name
- *               - phone
- *               - password
- *               - confirmPassword
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: user@example.com
- *               username:
- *                 type: string
- *                 example: john_doe
- *               name:
- *                 type: string
- *                 example: John Doe
- *               phone:
- *                 type: string
- *                 example: "+1234567890"
- *               password:
- *                 type: string
- *                 example: Password@123
- *               confirmPassword:
- *                 type: string
- *                 example: Password@123
- *               fcmToken:
- *                 type: string
- *                 example: "fcm_token_here"
- *     responses:
- *       201:
- *         description: Registration completed successfully. User is logged in.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     userId:
- *                       type: integer
- *                     email:
- *                       type: string
- *                     username:
- *                       type: string
- *                     name:
- *                       type: string
- *                     phone:
- *                       type: string
- *                     accessToken:
- *                       type: string
- *                     refreshToken:
- *                       type: string
- *       400:
- *         description: Validation error
- *       409:
- *         description: Email, username, or phone already registered
- */
-router.post('/complete-registration', UserController.completeRegistration);
 
 /* ---------------------- EMAIL OTP MANAGEMENT ---------------------- */
 
@@ -341,10 +280,10 @@ router.post('/verify-email-otp', UserController.verifyEmailOTP);
 
 /**
  * @swagger
- * /api/users/login/user:
+ * /api/users/login/initiate:
  *   post:
- *     summary: User login with flexible credentials
- *     description: Login with email, username, or phone number along with password. Returns access and refresh tokens.
+ *     summary: Initiate passwordless login
+ *     description: Send an OTP to the user's registered email using their email or username.
  *     tags: [User Authentication]
  *     requestBody:
  *       required: true
@@ -354,91 +293,25 @@ router.post('/verify-email-otp', UserController.verifyEmailOTP);
  *             type: object
  *             required:
  *               - credential
- *               - password
  *             properties:
  *               credential:
  *                 type: string
- *                 description: Email, username, or phone number
- *                 example: "user@example.com or john_doe or +1234567890"
- *               password:
- *                 type: string
- *                 example: Password@123
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     userId:
- *                       type: integer
- *                     email:
- *                       type: string
- *                     username:
- *                       type: string
- *                     firstName:
- *                       type: string
- *                     lastName:
- *                       type: string
- *                     isProfileComplete:
- *                       type: boolean
- *                     accessToken:
- *                       type: string
- *                     refreshToken:
- *                       type: string
- *       400:
- *         description: Missing credential or password
- *       401:
- *         description: Invalid credentials
- *       403:
- *         description: Email not verified
- */
-router.post('/login/user', UserController.login);
-
-/* ---------------------- PASSWORD MANAGEMENT ---------------------- */
-
-/**
- * @swagger
- * /api/users/forgot-password/request-otp:
- *   post:
- *     summary: Request password reset OTP
- *     description: Request OTP for password reset. OTP will be sent to registered email.
- *     tags: [User Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
+ *                 description: Email or username
  *                 example: user@example.com
  *     responses:
  *       200:
- *         description: OTP sent to email
+ *         description: OTP sent successfully
  *       404:
  *         description: User not found
  */
-router.post('/forgot-password/request-otp', UserController.requestPasswordResetOTP);
+router.post('/login/initiate', UserController.initiateLogin);
 
 /**
  * @swagger
- * /api/users/forgot-password/verify-otp:
+ * /api/users/login/verify:
  *   post:
- *     summary: Verify password reset OTP
- *     description: Verify OTP received for password reset.
+ *     summary: Verify login OTP
+ *     description: Verify the OTP sent to email and complete login. Returns tokens.
  *     tags: [User Authentication]
  *     requestBody:
  *       required: true
@@ -447,54 +320,26 @@ router.post('/forgot-password/request-otp', UserController.requestPasswordResetO
  *           schema:
  *             type: object
  *             required:
- *               - email
+ *               - credential
  *               - otp
  *             properties:
- *               email:
+ *               credential:
  *                 type: string
- *                 format: email
+ *                 description: Email or username used during initiation
  *               otp:
  *                 type: string
+ *                 example: "123456"
  *     responses:
  *       200:
- *         description: OTP verified successfully
+ *         description: Login successful
  *       400:
  *         description: Invalid OTP
  */
-router.post('/forgot-password/verify-otp', UserController.verifyPasswordResetOTP);
+router.post('/login/verify', UserController.verifyLoginOTP);
 
-/**
- * @swagger
- * /api/users/forgot-password/reset:
- *   post:
- *     summary: Reset password
- *     description: Reset password with verified email and OTP.
- *     tags: [User Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - newPassword
- *               - confirmPassword
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               newPassword:
- *                 type: string
- *               confirmPassword:
- *                 type: string
- *     responses:
- *       200:
- *         description: Password reset successfully
- *       400:
- *         description: Validation error
- */
-router.post('/forgot-password/reset', UserController.resetPassword);
+
+/* ---------------------- PASSWORD MANAGEMENT ---------------------- */
+
 
 /* ---------------------- PROTECTED ROUTES (REQUIRE AUTHENTICATION) ---------------------- */
 
@@ -545,24 +390,95 @@ router.post('/logout', authenticateToken, UserController.logout);
  * @swagger
  * /api/users/profile/create:
  *   post:
- *     summary: Create or update full profile
- *     description: Create or update user's full profile with personal, education, work, and business details.
+ *     summary: Create or update full profile (including optional profile picture)
+ *     description: Create or update user's full profile across 8 sections. You can upload an optional 'profilePicture' and send the rest of the data in 'profileData'.
  *     tags: [User Profile]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
+ *             properties:
+ *               profilePicture:
+ *                 type: string
+ *                 format: binary
+ *                 description: Optional profile picture file
+ *               profileData:
+ *                 type: object
+ *                 description: All 8 profile sections (Personal, Contact, Education, Work, Business, Products, Social, Digital Card)
+ *                 properties:
+ *                   personalIdentity:
+ *                     type: object
+ *                     properties:
+ *                       fullName: { type: string, example: "John Doe" }
+ *                       displayName: { type: string, example: "JohnD" }
+ *                       pronouns: { type: string, example: "He/Him" }
+ *                       dateOfBirth: { type: string, format: date, example: "1990-01-01" }
+ *                       gender: { type: string, example: "Male" }
+ *                       nationality: { type: string, example: "Indian" }
+ *                       location: { type: string, example: "Mumbai, India" }
+ *                       tagline: { type: string, example: "Creative Designer" }
+ *                       bio: { type: string, example: "Experienced professional..." }
+ *                   contactInformation:
+ *                     type: object
+ *                     properties:
+ *                       primaryMobile: { type: string, example: "+919876543210" }
+ *                       secondaryMobile: { type: string, example: "+919876543211" }
+ *                       emails: { type: array, items: { type: string }, example: ["work@john.com", "home@john.com"] }
+ *                       whatsAppNumber: { type: string, example: "+919876543210" }
+ *                       websiteUrl: { type: string, example: "https://johndoe.com" }
+ *                   education:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         institutionName: { type: string, example: "University of Tech" }
+ *                         degree: { type: string, example: "Bachelor of Engineering" }
+ *                         yearOfPassing: { type: string, example: "2012" }
+ *                   workExperience:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         company: { type: string, example: "Tech Solutions Inc" }
+ *                         designation: { type: string, example: "Senior Developer" }
+ *                         duration: { type: string, example: "2015 - Present" }
+ *                   businessDetails:
+ *                     type: object
+ *                     properties:
+ *                       companyName: { type: string, example: "ClickCard Global" }
+ *                       industry: { type: string, example: "IT Services" }
+ *                   productsServices:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         name: { type: string, example: "Premium Digital Card" }
+ *                   socialMediaLinks:
+ *                     type: object
+ *                     properties:
+ *                       linkedIn: { type: string, example: "linkedin.com/in/johndoe" }
+ *                       instagram: { type: string, example: "instagram.com/johndoe" }
+ *                   digitalCard:
+ *                     type: object
+ *                     properties:
+ *                       templateId: { type: string, example: "classic_gold" }
+ *                       isPublic: { type: boolean, example: true }
+ *           encoding:
+ *             profileData:
+ *               contentType: application/json
  *     responses:
  *       200:
  *         description: Profile updated successfully
+ *       201:
+ *         description: Full User Profile created/updated successfully
  *       401:
  *         description: Unauthorized
  */
-router.post('/profile/create', authenticateToken, UserController.createFullProfile);
+router.post('/profile/create', authenticateToken, upload.single('profilePicture'), UserController.createFullProfile);
 
 /**
  * @swagger
@@ -581,6 +497,9 @@ router.post('/profile/create', authenticateToken, UserController.createFullProfi
  */
 router.get('/profile/full', authenticateToken, UserController.getFullProfile);
 
+// Get user leads
+router.get('/leads', authenticateToken, LeadController.getUserLeads);
+
 /**
  * @swagger
  * /api/users/current:
@@ -598,41 +517,6 @@ router.get('/profile/full', authenticateToken, UserController.getFullProfile);
  */
 router.get('/current', authenticateToken, UserController.getCurrentUser);
 
-/**
- * @swagger
- * /api/users/change-password:
- *   post:
- *     summary: Change password
- *     description: Change password for authenticated user.
- *     tags: [User Authentication]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - oldPassword
- *               - newPassword
- *               - confirmPassword
- *             properties:
- *               oldPassword:
- *                 type: string
- *               newPassword:
- *                 type: string
- *               confirmPassword:
- *                 type: string
- *     responses:
- *       200:
- *         description: Password changed successfully
- *       400:
- *         description: Validation error
- *       401:
- *         description: Unauthorized
- */
-router.post('/change-password', authenticateToken, UserController.changePassword);
 
 /**
  * @swagger
@@ -684,5 +568,73 @@ router.post('/profile/make-private', authenticateToken, UserController.makeProfi
  *         description: Unauthorized
  */
 router.get('/profile/visibility', authenticateToken, UserController.getProfileVisibility);
+
+/**
+ * @swagger
+ * /api/users/profile/upload-picture:
+ *   post:
+ *     summary: Upload profile picture
+ *     description: Uploads a profile picture to Cloudinary and updates the user's profile.
+ *     tags: [User Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               profilePicture:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Picture uploaded successfully
+ *       400:
+ *         description: No file provided or invalid format
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/profile/upload-picture', authenticateToken, upload.single('profilePicture'), UserController.uploadProfilePicture);
+
+/**
+ * @swagger
+ * /api/users/profile/pdf-url:
+ *   get:
+ *     summary: Get public PDF URL
+ *     description: Returns the public URL for the user's resume PDF.
+ *     tags: [User Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: PDF URL retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: No active share link found
+ */
+router.get('/profile/pdf-url', authenticateToken, PDFController.getMyPDFUrl);
+
+/**
+ * @swagger
+ * /api/users/profile/my-resume.pdf:
+ *   get:
+ *     summary: Download own resume PDF
+ *     description: Generates and downloads the authenticated user's own resume PDF.
+ *     tags: [User Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: PDF resume generated
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/profile/my-resume.pdf', authenticateToken, PDFController.downloadMyResumePDF);
+
+// My Digital Card (Profile + QR + Public Link)
+router.get('/digital-card', authenticateToken, UserController.getMyDigitalCard);
 
 module.exports = router;

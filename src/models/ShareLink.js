@@ -231,6 +231,21 @@ const ShareLink = {
       throw err;
     }
   },
+
+  // Get total view count across all links
+  getTotalViews: async () => {
+    const query = 'SELECT SUM(view_count) FROM share_links;';
+    const result = await pool.query(query);
+    return parseInt(result.rows[0].sum) || 0;
+  },
+
+  // Get view count for today across all links
+  // This requires looking at the analytics table since share_links only has a total
+  getTodayViews: async () => {
+    const query = 'SELECT COUNT(*) FROM share_link_analytics WHERE viewed_at >= CURRENT_DATE;';
+    const result = await pool.query(query);
+    return parseInt(result.rows[0].count) || 0;
+  },
 };
 
 module.exports = { ShareLink };

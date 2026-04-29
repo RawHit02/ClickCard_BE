@@ -36,6 +36,8 @@ const options = {
             phone_number: { type: 'string' },
             date_of_birth: { type: 'string', format: 'date' },
             gender: { type: 'string' },
+            profile_picture: { type: 'string', description: 'Cloudinary URL of the profile picture' },
+            public_profile_enabled: { type: 'boolean' },
             is_email_verified: { type: 'boolean' },
             is_profile_complete: { type: 'boolean' },
           },

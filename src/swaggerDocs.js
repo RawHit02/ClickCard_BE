@@ -1,127 +1,5 @@
 /**
  * @swagger
- * /api/users/initiate-registration/unique:
- *   post:
- *     summary: Initiate user registration (Enhanced) - REPLACE FOR OLD REGISTER
- *     description: |
- *       Create a new user account with complete registration details including name, email, phone, password, and optional FCM token.
- *       Email and phone number must be unique across the system.
- *       Password must be strong with minimum 8 characters including uppercase, lowercase, number, and special character.
- *       OTP will be sent to the provided email for verification.
- *       After receiving this response, use /verify-email-otp endpoint to verify the email with the OTP code.
- *     tags:
- *       - Authentication
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - E_Mai_l
- *               - phone
- *               - password
- *               - confirmPassword
- *             properties:
- *               name:
- *                 type: string
- *                 example: John Doe
- *                 description: Full name of the user (required)
- *               E_Mai_l:
- *                 type: string
- *                 format: email
- *                 example: john@example.com
- *                 description: Email address (must be unique, required)
- *               phone:
- *                 type: string
- *                 example: "9876543210"
- *                 description: Phone number in any international format (must be unique, required)
- *               password:
- *                 type: string
- *                 format: password
- *                 example: SecurePass@123
- *                 description: Password with min 8 chars, uppercase, lowercase, number, special char (@$!%*?&) (required)
- *               confirmPassword:
- *                 type: string
- *                 format: password
- *                 example: SecurePass@123
- *                 description: Must match password (required)
- *               fcmToken:
- *                 type: string
- *                 example: abc123xyz-device-token
- *                 description: Firebase Cloud Messaging token for push notifications (optional)
- *     responses:
- *       201:
- *         description: Registration initiated successfully. OTP sent to email. User must verify email before login.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Registration initiated. Please verify your email.
- *                 data:
- *                   type: object
- *                   properties:
- *                     userId:
- *                       type: integer
- *                       example: 1
- *                     email:
- *                       type: string
- *                       example: john@example.com
- *                     name:
- *                       type: string
- *                       example: John Doe
- *                     phone:
- *                       type: string
- *                       example: "9876543210"
- *                     isEmailVerified:
- *                       type: boolean
- *                       example: false
- *                     isProfileComplete:
- *                       type: boolean
- *                       example: false
- *       400:
- *         description: |
- *           Validation failed. Common errors:
- *           - Missing required fields
- *           - Invalid email format
- *           - Invalid phone format
- *           - Password doesn't meet strength requirements
- *           - Passwords don't match
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Validation failed
- *                 errors:
- *                   type: object
- *                   example:
- *                     password: Password must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)
- *       409:
- *         description: Conflict - Email or phone already registered by another user
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Email already registered
  *
  * /api/users/verify-email-otp:
  *   post:
@@ -330,10 +208,11 @@
  *       404:
  *         description: User not found
  *
- * /api/users/login/user:
+
+ * /api/users/login/initiate:
  *   post:
- *     summary: User login with flexible credentials
- *     description: Login with email, username, or phone number along with password. Returns access and refresh tokens.
+ *     summary: Initiate passwordless login
+ *     description: Send an OTP to the user's registered email using their email or username.
  *     tags:
  *       - Authentication
  *     requestBody:
@@ -344,16 +223,40 @@
  *             type: object
  *             required:
  *               - credential
- *               - password
  *             properties:
  *               credential:
  *                 type: string
- *                 description: Email, username, or phone number
- *                 example: user@example.com
- *               password:
+ *                 description: Email or username
+ *                 example: john@example.com
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *       404:
+ *         description: User not found
+ *
+ * /api/users/login/verify:
+ *   post:
+ *     summary: Verify login OTP
+ *     description: Verify the OTP sent to email and complete login. Returns access and refresh tokens.
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - credential
+ *               - otp
+ *             properties:
+ *               credential:
  *                 type: string
- *                 format: password
- *                 example: SecurePass123
+ *                 description: Email or username used during initiation
+ *                 example: john@example.com
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
  *     responses:
  *       200:
  *         description: Login successful
@@ -375,20 +278,13 @@
  *                       type: string
  *                     username:
  *                       type: string
- *                     firstName:
- *                       type: string
- *                     lastName:
- *                       type: string
- *                     isProfileComplete:
- *                       type: boolean
  *                     accessToken:
  *                       type: string
  *                     refreshToken:
  *                       type: string
- *       401:
- *         description: Invalid email or password
- *       403:
- *         description: Please verify your email first
+ *       400:
+ *         description: Invalid or expired OTP
+ *
  *
  * /api/users/current:
  *   get:
@@ -479,137 +375,7 @@
  *       400:
  *         description: Invalid request
  *
- * /api/users/forgot-password/request-otp:
- *   post:
- *     summary: Request password reset OTP
- *     description: Request OTP for password reset. OTP will be sent to registered email.
- *     tags:
- *       - Password Management
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: john@example.com
- *     responses:
- *       200:
- *         description: Password reset OTP sent to email
- *       404:
- *         description: User not found
- *
- * /api/users/forgot-password/verify-otp:
- *   post:
- *     summary: Verify password reset OTP
- *     description: Verify OTP for password reset
- *     tags:
- *       - Password Management
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - otp
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: john@example.com
- *               otp:
- *                 type: string
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: OTP verified successfully
- *       400:
- *         description: Invalid or expired OTP
- *
- * /api/users/forgot-password/reset:
- *   post:
- *     summary: Reset password
- *     description: Reset user password after OTP verification
- *     tags:
- *       - Password Management
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - otp
- *               - newPassword
- *               - confirmPassword
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: john@example.com
- *               otp:
- *                 type: string
- *                 example: "123456"
- *               newPassword:
- *                 type: string
- *                 format: password
- *                 example: NewSecurePass789
- *               confirmPassword:
- *                 type: string
- *                 format: password
- *                 example: NewSecurePass789
- *     responses:
- *       200:
- *         description: Password reset successfully
- *       400:
- *         description: Invalid request or OTP
- *
- * /api/users/change-password:
- *   post:
- *     summary: Change password
- *     description: Change password for authenticated user (requires authentication)
- *     tags:
- *       - Password Management
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - currentPassword
- *               - newPassword
- *               - confirmPassword
- *             properties:
- *               currentPassword:
- *                 type: string
- *                 format: password
- *                 example: SecurePass123
- *               newPassword:
- *                 type: string
- *                 format: password
- *                 example: NewSecurePass789
- *               confirmPassword:
- *                 type: string
- *                 format: password
- *                 example: NewSecurePass789
- *     responses:
- *       200:
- *         description: Password changed successfully
- *       400:
- *         description: Invalid current password or validation failed
- *       401:
- *         description: Unauthorized
+
  *
  * /api/share/create:
  *   post:
@@ -1279,4 +1045,129 @@
  *         description: User not found
  *       500:
  *         description: Internal server error
+ * /api/public/profile/{identifier}/lead:
+ *   post:
+ *     summary: Submit contact details to a user profile
+ *     description: Submit name, email, phone, and message to a public profile. Triggers a real-time notification to the profile owner.
+ *     tags:
+ *       - Public
+ *     parameters:
+ *       - in: path
+ *         name: identifier
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Username or User ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Jane Doe
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: jane@example.com
+ *               phone:
+ *                 type: string
+ *                 example: "+919876543210"
+ *               message:
+ *                 type: string
+ *                 example: I would like to connect with you.
+ *     responses:
+ *       201:
+ *         description: Lead submitted successfully
+ *       404:
+ *         description: Profile not found
+ *
+ * /api/users/leads:
+ *   get:
+ *     summary: Get user leads
+ *     description: Retrieve all contact submissions received on the user's public profile.
+ *     tags:
+ *       - Leads
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Leads retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *
+ * /api/users/digital-card:
+ *   get:
+ *     summary: Get my digital card data
+ *     description: Retrieve full profile data, public URL, and QR code for the user's primary link.
+ *     tags:
+ *       - User Profile
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Digital card data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     profile:
+ *                       type: object
+ *                     publicUrl:
+ *                       type: string
+ *                     qrCode:
+ *                       type: string
+ *                     linkDetails:
+ *                       type: object
+ *       401:
+ *         description: Unauthorized
+ *
+ * /api/admin/stats:
+ *   get:
+ *     summary: Get admin dashboard statistics
+ *     description: Comprehensive counts of users, profiles, engagement, and leads. Requires admin role.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stats retrieved successfully
+ *       403:
+ *         description: Admin access required
+ *
+ * /api/admin/users:
+ *   get:
+ *     summary: Get all users
+ *     description: List all registered users with their status. Requires admin role.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Users retrieved successfully
+ *
+ * /api/admin/leads:
+ *   get:
+ *     summary: Get all leads platform-wide
+ *     description: List all lead submissions across the entire platform. Requires admin role.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All leads retrieved successfully
  */

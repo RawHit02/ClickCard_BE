@@ -20,6 +20,9 @@ const sendOTPEmail = async (email, otp, purpose, userName = 'User') => {
   } else if (purpose === 'password_reset') {
     subject = '🔐 Reset Your Password - ClickCard';
     htmlContent = emailTemplates.passwordReset(otp, userName);
+  } else if (purpose === 'login') {
+    subject = '🔓 Login Verification - ClickCard';
+    htmlContent = emailTemplates.loginOTP(otp, userName);
   }
 
   const mailOptions = {

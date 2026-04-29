@@ -1,5 +1,8 @@
 const AuthService = require('../services/AuthService');
 const { User } = require('../models/User');
+const { ShareLink } = require('../models/ShareLink');
+const ShareLinkService = require('../services/ShareLinkService');
+const CloudinaryService = require('../services/CloudinaryService');
 const { sendSuccessResponse, sendErrorResponse } = require('../utils/responseHandler');
 const { validateEmail } = require('../utils/validator');
 
@@ -77,36 +80,7 @@ const UserController = {
     }
   },
 
-  // Step 4: Complete registration (create user)
-  completeRegistration: async (req, res) => {
-    try {
-      const { email, username, name, phone, password, confirmPassword, fcmToken } = req.body;
 
-      if (!email || !username || !name || !phone || !password || !confirmPassword) {
-        return sendErrorResponse(res, 400, 'Email, username, name, phone, password, and confirm password are required');
-      }
-
-      const result = await AuthService.completeRegistration(
-        email,
-        username,
-        name,
-        phone,
-        password,
-        confirmPassword,
-        fcmToken || ''
-      );
-
-      if (result.success) {
-        return sendSuccessResponse(res, 201, result.message, result.data);
-      } else {
-        const statusCode = result.statusCode || 400;
-        return sendErrorResponse(res, statusCode, result.message);
-      }
-    } catch (err) {
-      console.error('Complete registration error:', err);
-      return sendErrorResponse(res, 500, 'Internal server error');
-    }
-  },
 
   // Resend email OTP
   resendEmailOTP: async (req, res) => {
@@ -152,39 +126,95 @@ const UserController = {
     }
   },
 
-  // POST /api/users/login/user
-  login: async (req, res) => {
+  // POST /api/users/login/initiate
+  initiateLogin: async (req, res) => {
     try {
-      const { credential, password } = req.body;
-
-      if (!credential || !password) {
-        return sendErrorResponse(res, 400, 'Credential (email, username, or phone) and password are required');
-      }
-
-      const result = await AuthService.login(credential, password);
+      const { credential } = req.body;
+      const result = await AuthService.initiateLogin(credential);
 
       if (result.success) {
         return sendSuccessResponse(res, 200, result.message, result.data);
       } else {
-        const statusCode = result.statusCode || (result.message === 'Please verify your email first' ? 403 : 401);
-        return sendErrorResponse(res, statusCode, result.message, result.data);
+        return sendErrorResponse(res, result.statusCode || 400, result.message);
       }
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('Login initiation error:', err);
       return sendErrorResponse(res, 500, 'Internal server error');
     }
   },
+
+  // POST /api/users/login/verify
+  verifyLoginOTP: async (req, res) => {
+    try {
+      const { credential, otp } = req.body;
+      const result = await AuthService.verifyLoginOTP(credential, otp);
+
+      if (result.success) {
+        return sendSuccessResponse(res, 200, result.message, result.data);
+      } else {
+        return sendErrorResponse(res, result.statusCode || 400, result.message);
+      }
+    } catch (err) {
+      console.error('Login verification error:', err);
+      return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+
 
   // POST /api/users/profile/create
   createFullProfile: async (req, res) => {
     try {
       const userId = req.user.userId;
-      const profileData = req.body;
+
+      // Support both:
+      // 1. multipart/form-data -> profileData as JSON string + optional profilePicture file
+      // 2. application/json -> req.body is already the profile data object
+      let profileData;
+      if (req.body.profileData) {
+        // Handle multipart/form-data: profileData might be a JSON string or an object
+        if (typeof req.body.profileData === 'string') {
+          try {
+            profileData = JSON.parse(req.body.profileData);
+          } catch (parseErr) {
+            return sendErrorResponse(res, 400, 'Invalid JSON in profileData field');
+          }
+        } else {
+          profileData = req.body.profileData;
+        }
+      } else {
+        // Handle application/json: req.body is the profile data
+        profileData = req.body;
+      }
+
+      // Handle optional profile picture upload
+      let imageUrl = null;
+      if (req.file) {
+        try {
+          const uploadResult = await CloudinaryService.uploadImage(
+            req.file.buffer,
+            'users',
+            userId.toString()
+          );
+          imageUrl = uploadResult.secure_url;
+
+          // Save image URL to users table
+          await User.updateProfilePicture(userId, imageUrl);
+        } catch (uploadErr) {
+          console.error('Profile picture upload failed:', uploadErr.message);
+          // Continue with profile creation even if image upload fails
+        }
+      }
 
       const result = await AuthService.createOrUpdateFullProfile(userId, profileData);
 
       if (result.success) {
-        return sendSuccessResponse(res, 201, result.message, result.data);
+        // Include imageUrl in response if uploaded
+        const responseData = { ...result.data };
+        if (imageUrl) {
+          responseData.profilePicture = imageUrl;
+        }
+        return sendSuccessResponse(res, 201, result.message, responseData);
       } else {
         return sendErrorResponse(res, 400, result.message, result.errors || result.error);
       }
@@ -277,99 +307,7 @@ const UserController = {
     }
   },
 
-  // POST /api/users/forgot-password/request-otp
-  requestPasswordResetOTP: async (req, res) => {
-    try {
-      const { email } = req.body;
 
-      if (!email) {
-        return sendErrorResponse(res, 400, 'Email is required');
-      }
-
-      const result = await AuthService.requestPasswordResetOTP(email);
-
-      if (result.success) {
-        return sendSuccessResponse(res, 200, result.message);
-      } else {
-        return sendErrorResponse(res, 404, result.message);
-      }
-    } catch (err) {
-      console.error('Request password reset OTP error:', err);
-      return sendErrorResponse(res, 500, 'Internal server error');
-    }
-  },
-
-  // POST /api/users/forgot-password/verify-otp
-  verifyPasswordResetOTP: async (req, res) => {
-    try {
-      const { email, otp } = req.body;
-
-      if (!email || !otp) {
-        return sendErrorResponse(res, 400, 'Email and OTP are required');
-      }
-
-      const result = await AuthService.verifyPasswordResetOTP(email, otp);
-
-      if (result.success) {
-        return sendSuccessResponse(res, 200, result.message);
-      } else {
-        return sendErrorResponse(res, 400, result.message);
-      }
-    } catch (err) {
-      console.error('Verify password reset OTP error:', err);
-      return sendErrorResponse(res, 500, 'Internal server error');
-    }
-  },
-
-  // POST /api/users/forgot-password/reset
-  resetPassword: async (req, res) => {
-    try {
-      const { email, otp, newPassword, confirmPassword } = req.body;
-
-      if (!email || !otp || !newPassword || !confirmPassword) {
-        return sendErrorResponse(res, 400, 'Email, OTP, and passwords are required');
-      }
-
-      const result = await AuthService.resetPassword(email, otp, newPassword, confirmPassword);
-
-      if (result.success) {
-        return sendSuccessResponse(res, 200, result.message);
-      } else {
-        return sendErrorResponse(res, 400, result.message);
-      }
-    } catch (err) {
-      console.error('Reset password error:', err);
-      return sendErrorResponse(res, 500, 'Internal server error');
-    }
-  },
-
-  // POST /api/users/change-password
-  changePassword: async (req, res) => {
-    try {
-      const userId = req.user.userId;
-      const { currentPassword, newPassword, confirmPassword } = req.body;
-
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        return sendErrorResponse(res, 400, 'All password fields are required');
-      }
-
-      const result = await AuthService.changePassword(
-        userId,
-        currentPassword,
-        newPassword,
-        confirmPassword
-      );
-
-      if (result.success) {
-        return sendSuccessResponse(res, 200, result.message);
-      } else {
-        return sendErrorResponse(res, 400, result.message);
-      }
-    } catch (err) {
-      console.error('Change password error:', err);
-      return sendErrorResponse(res, 500, 'Internal server error');
-    }
-  },
 
   // POST /api/users/profile/make-public
   makeProfilePublic: async (req, res) => {
@@ -468,6 +406,81 @@ const UserController = {
     } catch (err) {
       console.error('Get profile visibility error:', err);
       return sendErrorResponse(res, 500, 'Internal server error');
+    }
+  },
+
+  // POST /api/users/profile/upload-picture
+  uploadProfilePicture: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+
+      if (!req.file) {
+        return sendErrorResponse(res, 400, 'No image file provided');
+      }
+
+      // 1. Upload to Cloudinary
+      // Folder: 'users', Public ID: specific userId
+      const result = await CloudinaryService.uploadImage(
+        req.file.buffer,
+        'users',
+        userId.toString()
+      );
+
+      // 2. Update the database
+      await User.updateProfilePicture(userId, result.secure_url);
+
+      return sendSuccessResponse(res, 200, 'Profile picture uploaded successfully', {
+        imageUrl: result.secure_url,
+        userId: userId
+      });
+    } catch (err) {
+      console.error('Profile picture upload error:', err);
+      return sendErrorResponse(res, 500, err.message || 'Failed to upload profile picture');
+    }
+  },
+
+  // GET /api/users/digital-card
+  getMyDigitalCard: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+
+      // 1. Get full profile
+      const profile = await User.getProfile(userId);
+      
+      // 2. Get primary share link
+      let links = await ShareLink.findByUserId(userId);
+      let primaryLink = links.find(l => l.is_active && l.custom_slug) || links.find(l => l.is_active) || links[0];
+
+      // 3. If no link exists, create a default one
+      if (!primaryLink) {
+        const newLink = await ShareLinkService.createShareLink(userId, { shareMethod: 'link' });
+        primaryLink = {
+          id: newLink.id,
+          custom_slug: newLink.custom_slug,
+          short_code: newLink.short_code,
+          is_active: true
+        };
+      }
+
+      // 4. Generate/Get QR Code and Public URL
+      const baseUrl = process.env.SHARE_LINK_BASE_URL || `http://${req.get('host')}`;
+      const identifier = primaryLink.custom_slug || primaryLink.short_code || userId;
+      const publicUrl = `${baseUrl}/api/public/profile/${identifier}`;
+      const qrCode = await ShareLinkService.getQRCode(primaryLink.id, userId, 'dataurl');
+
+      return sendSuccessResponse(res, 200, 'Digital card data retrieved successfully', {
+        profile,
+        publicUrl,
+        qrCode,
+        linkDetails: {
+          id: primaryLink.id,
+          slug: primaryLink.custom_slug,
+          shortCode: primaryLink.short_code
+        }
+      });
+    } catch (err) {
+      console.error('Get my digital card error:', err);
+      return sendErrorResponse(res, 500, 'Failed to retrieve digital card data');
     }
   },
 };

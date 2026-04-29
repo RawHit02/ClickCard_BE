@@ -20,27 +20,7 @@ const validateUsername = (username) => {
   return usernameRegex.test(username);
 };
 
-const validateFieldsRegistration = (email, password, confirmPassword) => {
-  const errors = {};
 
-  if (!email || !validateEmail(email)) {
-    errors.email = 'Invalid email address';
-  }
-
-  if (!password) {
-    errors.password = 'Password is required';
-  } else if (!validatePassword(password)) {
-    errors.password = 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)';
-  }
-
-  if (!confirmPassword) {
-    errors.confirmPassword = 'Confirm password is required';
-  } else if (password !== confirmPassword) {
-    errors.confirmPassword = 'Passwords do not match';
-  }
-
-  return { isValid: Object.keys(errors).length === 0, errors };
-};
 
 const validateFieldsProfile = (firstName, lastName, dateOfBirth, gender, phoneNumber) => {
   const errors = {};
@@ -73,43 +53,10 @@ const validateFieldsProfile = (firstName, lastName, dateOfBirth, gender, phoneNu
   return { isValid: Object.keys(errors).length === 0, errors };
 };
 
-// Validate registration with enhanced fields (name, phone, fcmToken)
-const validateEnhancedRegistration = (name, email, phone, password, confirmPassword) => {
-  const errors = {};
-
-  if (!name || name.trim() === '') {
-    errors.name = 'Name is required';
-  }
-
-  if (!email || !validateEmail(email)) {
-    errors.email = 'Invalid email address';
-  }
-
-  if (!phone || !validatePhoneNumber(phone)) {
-    errors.phone = 'Invalid phone number';
-  }
-
-  if (!password) {
-    errors.password = 'Password is required';
-  } else if (!validatePassword(password)) {
-    errors.password = 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)';
-  }
-
-  if (!confirmPassword) {
-    errors.confirmPassword = 'Confirm password is required';
-  } else if (password !== confirmPassword) {
-    errors.confirmPassword = 'Passwords do not match';
-  }
-
-  return { isValid: Object.keys(errors).length === 0, errors };
-};
-
 module.exports = {
   validateEmail,
   validatePassword,
   validatePhoneNumber,
   validateUsername,
-  validateFieldsRegistration,
   validateFieldsProfile,
-  validateEnhancedRegistration,
 };

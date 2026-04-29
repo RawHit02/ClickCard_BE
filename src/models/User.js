@@ -13,7 +13,7 @@ const createUserTable = async () => {
       date_of_birth DATE,
       gender VARCHAR(20),
       profile_picture VARCHAR(500),
-      fcm_token VARCHAR(500),
+      role VARCHAR(20) DEFAULT 'user',
       is_email_verified BOOLEAN DEFAULT FALSE,
       is_profile_complete BOOLEAN DEFAULT FALSE,
       public_profile_enabled BOOLEAN DEFAULT FALSE,
@@ -92,6 +92,16 @@ const createUserTable = async () => {
       platform VARCHAR(50),
       viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS leads (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(100),
+      email VARCHAR(255),
+      phone VARCHAR(20),
+      message TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `;
 
   try {
@@ -103,7 +113,7 @@ const createUserTable = async () => {
     try {
       const columnsToAdd = [
         { name: 'username', type: 'VARCHAR(100) UNIQUE' },
-        { name: 'fcm_token', type: 'VARCHAR(500)' },
+        { name: 'role', type: "VARCHAR(20) DEFAULT 'user'" },
         { name: 'public_profile_enabled', type: 'BOOLEAN DEFAULT FALSE' },
         { name: 'profile_bio', type: 'VARCHAR(500)' },
         { name: 'profile_header_image', type: 'VARCHAR(500)' },
@@ -174,7 +184,7 @@ const User = {
     const query = `
       SELECT id, email, username, password, is_email_verified, is_profile_complete, 
              first_name, last_name, phone_number, google_id, apple_id, auth_provider,
-             fcm_token, device_id
+             fcm_token, device_id, role
       FROM users
       WHERE email = $1
     `;
@@ -189,7 +199,7 @@ const User = {
   // Find user by username
   findByUsername: async (username) => {
     const query = `
-      SELECT id, email, username, is_email_verified, is_profile_complete, first_name
+      SELECT id, email, username, is_email_verified, is_profile_complete, first_name, role
       FROM users
       WHERE username = $1
     `;
@@ -221,7 +231,7 @@ const User = {
     const query = `
       SELECT id, email, first_name, last_name, phone_number, date_of_birth, 
              gender, profile_picture, is_email_verified, is_profile_complete, 
-             last_login, created_at, updated_at
+             last_login, created_at, updated_at, role
       FROM users
       WHERE id = $1
     `;
@@ -323,7 +333,9 @@ const User = {
   // Get full profile
   getProfile: async (userId) => {
     const query = `
-      SELECT p.*, u.email, u.first_name, u.last_name, u.phone_number, u.is_email_verified, u.is_profile_complete
+      SELECT p.*, u.email, u.first_name, u.last_name, u.phone_number, 
+             u.profile_picture, u.public_profile_enabled,
+             u.is_email_verified, u.is_profile_complete
       FROM user_profiles p
       JOIN users u ON p.user_id = u.id
       WHERE p.user_id = $1
@@ -514,6 +526,62 @@ const User = {
     } catch (err) {
       throw err;
     }
+  },
+
+  // Update profile picture URL
+  updateProfilePicture: async (userId, imageUrl) => {
+    const query = `
+      UPDATE users
+      SET profile_picture = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, email, profile_picture
+    `;
+    try {
+      const result = await pool.query(query, [imageUrl, userId]);
+      return result.rows[0];
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Get total user count
+  getCount: async () => {
+    const query = 'SELECT COUNT(*) FROM users;';
+    const result = await pool.query(query);
+    return parseInt(result.rows[0].count);
+  },
+
+  // Get users registered today
+  getTodayCount: async () => {
+    const query = 'SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE;';
+    const result = await pool.query(query);
+    return parseInt(result.rows[0].count);
+  },
+
+  // Get count of users with complete profiles
+  getProfileCompleteCount: async () => {
+    const query = 'SELECT COUNT(*) FROM users WHERE is_profile_complete = TRUE;';
+    const result = await pool.query(query);
+    return parseInt(result.rows[0].count);
+  },
+
+  // Get count of users with public profiles enabled
+  getPublicProfileCount: async () => {
+    const query = 'SELECT COUNT(*) FROM users WHERE public_profile_enabled = TRUE;';
+    const result = await pool.query(query);
+    return parseInt(result.rows[0].count);
+  },
+
+  // Get all users for admin
+  findAll: async () => {
+    const query = `
+      SELECT id, email, username, first_name, last_name, role, is_profile_complete, 
+             public_profile_enabled, created_at, last_login 
+      FROM users 
+      ORDER BY created_at DESC;
+    `;
+    const result = await pool.query(query);
+    return result.rows;
   },
 };
 

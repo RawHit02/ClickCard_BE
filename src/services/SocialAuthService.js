@@ -42,7 +42,6 @@ const SocialAuthService = {
         appleId,
         googleId,
         authType,
-        fcmToken = '',
       } = requestData;
 
       // Validate request
@@ -97,7 +96,7 @@ const SocialAuthService = {
           socialId,
           name,
           phoneNumber,
-          fcmToken,
+          '', // Removed fcmToken
           deviceId
         );
       } else {
@@ -149,7 +148,7 @@ const SocialAuthService = {
         }
 
         // Update device info
-        await User.updateDeviceInfo(user.id, deviceId, fcmToken);
+        await User.updateDeviceInfo(user.id, deviceId, ''); // Removed fcmToken
 
         // Update name if not set and provided
         if (!user.first_name && name) {
@@ -162,7 +161,7 @@ const SocialAuthService = {
       }
 
       // Generate tokens
-      const accessToken = generateAccessToken(user.id, user.email);
+      const accessToken = generateAccessToken(user.id, user.email, user.role || 'user');
       const refreshToken = generateRefreshToken(user.id);
 
       // Save refresh token to database

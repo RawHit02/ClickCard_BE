@@ -125,6 +125,62 @@ const emailTemplates = {
     `;
   },
 
+  loginOTP: (otp, userName = 'User') => {
+    return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }
+          .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); color: #ffffff; padding: 40px 20px; text-align: center; }
+          .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
+          .content { padding: 40px 30px; }
+          .otp-box { background-color: #f8f9fa; border: 2px solid #0072ff; border-radius: 8px; padding: 20px; text-align: center; margin: 30px 0; }
+          .otp-code { font-size: 36px; font-weight: bold; color: #0072ff; letter-spacing: 8px; font-family: 'Courier New', monospace; }
+          .otp-label { color: #666; font-size: 14px; margin-bottom: 10px; }
+          .expiry-note { color: #e74c3c; font-size: 13px; margin-top: 15px; font-weight: 500; }
+          .footer { background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0; }
+          .footer p { margin: 5px 0; color: #666; font-size: 12px; }
+          .message { color: #333; font-size: 15px; line-height: 1.6; }
+          .security-note { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; font-size: 13px; color: #856404; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔓 Login Verification</h1>
+          </div>
+          <div class="content">
+            <p class="message">Hi ${userName},</p>
+            <p class="message">Use the One-Time Password (OTP) below to securely log in to your ClickCard account:</p>
+            
+            <div class="otp-box">
+              <div class="otp-label">Your Login Code:</div>
+              <div class="otp-code">${otp}</div>
+              <div class="expiry-note">⏱️ Valid for 10 minutes only</div>
+            </div>
+ 
+            <p class="message">Enter this code on the login page to access your account. For your security, this code should not be shared with anyone.</p>
+ 
+            <div class="security-note">
+              <strong>🔒 Security Tip:</strong> If you didn't request this code, your account might be being accessed by someone else. Please change your password or contact support.
+            </div>
+ 
+            <p class="message">Happy connecting!<br>The ClickCard Team</p>
+          </div>
+          <div class="footer">
+            <p><strong>ClickCard Inc.</strong></p>
+            <p>© 2026 ClickCard. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+    `;
+  },
+
   welcomeEmail: (userName = 'User', email) => {
     return `
     <!DOCTYPE html>

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ShareLinkController = require('../controllers/ShareLinkController');
-const authenticateToken = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // All routes require authentication
 
