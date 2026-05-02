@@ -198,6 +198,7 @@ const SocialAuthService = {
             isEmailVerified: user.is_email_verified,
             isProfileComplete: user.is_profile_complete,
             authProvider: user.auth_provider,
+            role: user.role,
           },
           tokens: {
             accessToken,

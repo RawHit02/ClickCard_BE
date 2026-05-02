@@ -189,14 +189,14 @@ const createUserTable = async () => {
 
 const User = {
   // Create a new user with full registration details
-  create: async (email, hashedPassword, name = '', phone = '', fcmToken = '', username = '', referralCode = '') => {
+  create: async (email, hashedPassword, name = '', phone = '', fcmToken = '', username = '', referralCode = '', role = 'user') => {
     const query = `
-      INSERT INTO users (email, password, first_name, phone_number, fcm_token, username, referral_code)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO users (email, password, first_name, phone_number, fcm_token, username, referral_code, role)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, email, username, first_name, phone_number, is_email_verified, is_profile_complete, created_at, role, is_blocked, referral_code
     `;
     try {
-      const result = await pool.query(query, [email, hashedPassword, name, phone, fcmToken, username, referralCode]);
+      const result = await pool.query(query, [email, hashedPassword, name, phone, fcmToken, username, referralCode, role]);
       return result.rows[0];
     } catch (err) {
       throw err;
@@ -469,19 +469,19 @@ const User = {
   },
 
   // Create user via social auth
-  createSocialUser: async (email, authType, socialId, name = '', phone = '', deviceId = '', referralCode = '') => {
+  createSocialUser: async (email, authType, socialId, name = '', phone = '', deviceId = '', referralCode = '', role = 'user') => {
     const socialIdField = authType === 'google' ? 'google_id' : 'apple_id';
     const randomPassword = require('crypto').randomBytes(32).toString('hex');
     
     const query = `
       INSERT INTO users (email, password, first_name, phone_number, 
-                         auth_provider, ${socialIdField}, device_id, referral_code)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                         auth_provider, ${socialIdField}, device_id, referral_code, role)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, email, first_name, last_name, phone_number, is_email_verified, 
                 is_profile_complete, auth_provider, device_id, created_at, role, is_blocked, referral_code
     `;
     try {
-      const result = await pool.query(query, [email, randomPassword, name, phone, authType, socialId, deviceId, referralCode]);
+      const result = await pool.query(query, [email, randomPassword, name, phone, authType, socialId, deviceId, referralCode, role]);
       return result.rows[0];
     } catch (err) {
       throw err;

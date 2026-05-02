@@ -56,6 +56,22 @@
  *     responses:
  *       201:
  *         description: Registration completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId: { type: integer }
+ *                     email: { type: string }
+ *                     username: { type: string }
+ *                     role: { type: string, example: user }
+ *                     accessToken: { type: string }
+ *                     refreshToken: { type: string }
  *
  * /api/auth/social-signin:
  *   post:
@@ -84,6 +100,24 @@
  *     responses:
  *       200:
  *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id: { type: integer }
+ *                         role: { type: string, example: user }
+ *                     tokens:
+ *                       type: object
+ *                       properties:
+ *                         accessToken: { type: string }
  *       201:
  *         description: Social registration successful
  *

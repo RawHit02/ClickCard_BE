@@ -111,7 +111,7 @@ const AuthService = {
   },
 
   // Step 4: Complete registration with username and optional referral code
-  completeRegistration: async (email, username, referralCode = null) => {
+  completeRegistration: async (email, username, referralCode = null, role = 'user') => {
     try {
       // 1. Validate username
       if (!username || !validateUsername(username)) {
@@ -132,7 +132,7 @@ const AuthService = {
       const userReferralCode = await AuthService.generateUniqueReferralCode();
 
       // 4. Create the user (Passwordless - no password needed)
-      const user = await User.create(email.toLowerCase(), '', '', '', '', username, userReferralCode);
+      const user = await User.create(email.toLowerCase(), '', '', '', '', username, userReferralCode, role);
 
       // 5. Handle referral if code provided
       if (referralCode) {
@@ -165,6 +165,7 @@ const AuthService = {
           email: user.email,
           username: user.username,
           referralCode: user.referral_code,
+          role: user.role,
           accessToken,
           refreshToken,
         },

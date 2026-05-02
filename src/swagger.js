@@ -98,6 +98,9 @@
  *                       type: string
  *                     refreshToken:
  *                       type: string
+ *                     role:
+ *                       type: string
+ *                       example: user
  *       401:
  *         description: Invalid email or password
  *       403:
@@ -181,6 +184,9 @@
  *                       type: string
  *                     isProfileComplete:
  *                       type: boolean
+ *                     role:
+ *                       type: string
+ *                       example: user
  *       401:
  *         description: Unauthorized
  *       404:
